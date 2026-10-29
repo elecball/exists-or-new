@@ -1,6 +1,6 @@
 # Exists or New
 
-CS424 Program Reasoning의 equivalence reduction을 체험하는 웹 퍼즐 게임입니다.
+Equivalence reduction을 체험하는 웹 퍼즐 게임입니다.
 
 - 기록 속 두 식을 +, −, ×로 조합한 후보를 판정합니다.
 - 공개된 모든 입력에서 같은 출력을 내는 기존 식이 있으면 ∃, 없으면 +를 누릅니다.
