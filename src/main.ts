@@ -4,6 +4,7 @@ import {guideMarkup} from './guide.ts';
 import { mountTutorial, type TutorialControls } from './tutorial.ts';
 import { escapeHtml as escape, renderMath } from './math-markup.ts';
 import { AutoAdvance } from './auto-advance.ts';
+import { fitCandidate } from './fit-candidate.ts';
 import { AdditionTransition, type ArrivalTarget } from './addition-transition.ts';
 import { playFeedback, soundEnabled, toggleSound, unlockSound } from './sound.ts';
 import { format, formatComposition, symbol } from './math.ts';
@@ -38,12 +39,11 @@ const advance = new AutoAdvance(() => {
   nextRound();
 });
 const expression = (s: string) => escape(s).replace(/-/g, '−').replace(/\^([0-9]+)/g, '<sup>$1</sup>');
-function scoreKey(): string { return `equivalence-best-v8-config-${selectedVariables}-${selectedSeconds}`; }
+function scoreKey(): string { return `equivalence-best-v9-config-${selectedVariables}-${selectedSeconds}`; }
 function best(): number {
   try {
-    // Old preset scores belong to their original time/count, not the newly edited presets.
-    const legacy = [{id:'easy', seconds:18, count:1}, {id:'medium', seconds:15, count:2}, {id:'hard', seconds:12, count:3}].find(p => p.seconds === selectedSeconds && p.count === selectedVariables);
-    const keys = [scoreKey(), `equivalence-best-v7-custom-${selectedVariables}-${selectedSeconds}`, ...(legacy ? [`equivalence-best-v6-endless-${legacy.id}`] : [])];
+    // Easier generation has its own records, separate from the previous rules.
+    const keys = [scoreKey()];
     return Math.max(0, ...keys.map(key => Number(localStorage.getItem(key))).filter(n => Number.isFinite(n) && n > 0));
   } catch { return 0; }
 }
@@ -111,10 +111,10 @@ function nextRound() {
     outgoing.classList.add('outgoing-puzzle'); outgoing.inert = true; outgoing.setAttribute('aria-hidden', 'true');
   }
   const previousInputs = session!.mappings.length;
-  const previousRecords = new Set(session!.records.map(r => r.id));
+  const previousRecords = new Map(session!.records.map(r => [r.id, r]));
   question = generateQuestion(session!);
   newInputIndexes = question.mappings.map((_, i) => i).filter(i => i >= previousInputs);
-  newRecordIds = session!.records.filter(r => !previousRecords.has(r.id)).map(r => r.id);
+  newRecordIds = session!.records.filter(r => previousRecords.get(r.id) !== r).map(r => r.id);
   introducing = newInputIndexes.length > 0 || newRecordIds.length > 0;
   answer = null; remaining = roundSeconds(); deadline = 0; paused = false; screen = 'playing'; renderGame();
   if (introducing) {
@@ -148,6 +148,7 @@ function prepareQuestion() {
   readyFrame = requestAnimationFrame(() => { readyFrame = requestAnimationFrame(() => {
     readyFrame = 0;
     if (screen !== 'playing') return;
+    fitCandidate(root.querySelector('.candidate'));
     root.querySelector<HTMLElement>('#question-title')?.focus();
     if (document.hidden) freezeForVisibility(); else if (!paused && !introducing) runClock();
   }); });
@@ -189,6 +190,7 @@ function renderGame() {
   const reductions = s.answers.filter(a => a.question.matchId !== null).length;
   root.innerHTML = `${header()}<main class="game ${introducing ? 'is-introducing' : ''} ${storing ? 'is-storing' : ''} ${revealed && !answer!.correct ? 'took-damage' : ''} ${revealed && q.matchId !== null && answer!.choice === false ? 'is-duplicate' : ''}"><section class="status" aria-label="${t('게임 현황', 'Game status')}"><span class="round-label" aria-label="${t(`${round}라운드`, `Round ${round}`)}"><b>${round}</b></span>${livesMarkup()}<span class="score-item"><small>${t('점수', 'Score')}</small> <strong>${expression(s.score.toLocaleString())}</strong></span><span class="score-item"><small>${t('연속', 'Streak')}</small> <strong>${s.streak}</strong></span><span class="time-value time-${timeTone(remaining, roundSeconds())}" aria-label="${t('남은 시간', 'Time left')}"><span id="time">${expression(remaining.toFixed(1))}</span><small>${t('초', 's')}</small></span>${!revealed ? `<button id="pause" class="pause-button" aria-label="${t('게임 일시정지', 'Pause game')}">Ⅱ</button>` : `<span class="clock-stopped" aria-label="${t('타이머 정지', 'Timer stopped')}">✓</span>`}</section><div class="time-track" aria-hidden="true"><div id="time-bar" class="time-${timeTone(remaining, roundSeconds())}" style="transform:scaleX(${remaining / roundSeconds()})"></div></div><section class="archive" aria-label="${t('보관한 대표 식', 'Archived representatives')}"><div class="archive-heading"><h2>${t('기록', 'Archive')} <span>${s.records.length}</span></h2><span class="reduction-trace" aria-label="${t('축약한 식', 'Reduced expressions')} ${reductions}" title="${t('기존 대표로 축약한 식', 'Expressions reduced to existing representatives')}">∃ ${reductions}</span><div class="archive-tools"><button id="show-records" aria-haspopup="dialog" ${introducing || storing ? 'disabled' : ''}>${t('전체 보기', 'View all')}</button>${revealed && q.matchId !== null ? `<button data-locate="${q.matchId}" aria-label="${t('기록에서 동치 대표 찾기', 'Find the matching representative')}">≡</button>` : ''}</div></div><div class="records" tabindex="0" aria-label="${t('식 기록 세로 스크롤', 'Scroll archived expressions vertically')}">${recordMarkup()}</div></section>${mappingMarkup()}<div class="puzzle-host" tabindex="-1" aria-label="${t('문제 영역', 'Puzzle area')}"><section ${introducing ? 'inert aria-hidden="true"' : ''} class="puzzle ${introducing ? 'preparing' : ''}" aria-label="${t('현재 문제', 'Current candidate')}"><div id="question-title" tabindex="-1" class="candidate" aria-label="${escape(formatComposition(q.expr))}"><div class="operand"><div class="math operand-expression ${format(q.left.expr).length > 25 ? 'long' : ''}">${renderMath(q.left.expr, true)}</div></div><span class="operator math" aria-hidden="true">${symbol(q.op)}</span><div class="operand"><div class="math operand-expression ${format(q.right.expr).length > 25 ? 'long' : ''}">${renderMath(q.right.expr, true)}</div></div></div><div class="answer-area">${answerButtons()}${revealed ? feedbackMarkup() : ''}</div></section></div></main>`;
   root.querySelector<HTMLElement>('.records')!.scrollTop = scrollTop;
+  fitCandidate(root.querySelector('.candidate'));
   bindCommon();
   root.querySelector('#show-records')!.addEventListener('click', openArchive);
   root.querySelectorAll<HTMLButtonElement>('[data-locate]').forEach(button => button.addEventListener('click', () => {
@@ -246,10 +248,13 @@ function choose(choice: boolean | null) {
       storing = false; root.querySelector<HTMLButtonElement>('#show-records')?.removeAttribute('disabled'); card.classList.add('record-enter'); root.querySelector('.game')?.classList.remove('is-storing');
     });
   }
-  if (answer.correct && question!.matchId !== null) {
+  if (question!.matchId !== null && (answer.correct || answer.replaced)) {
     const source = root.querySelector<HTMLElement>('.candidate')!;
     const representative = root.querySelector<HTMLElement>(`#record-${question!.matchId}`)!;
-    void storageFlight.absorb(source, representative, () => {});
+    const expression = representative.querySelector<HTMLElement>('.record-expression')!;
+    const replacement = expression.innerHTML;
+    if (answer.replaced) expression.innerHTML = renderMath(answer.replaced.expr);
+    void storageFlight.absorb(source, representative, () => {}, () => { expression.innerHTML = replacement; });
   }
   playFeedback(answer.correct, answer.choice === null);
   advance.start(2000);
@@ -356,4 +361,6 @@ document.addEventListener('visibilitychange', () => {
     if (introducing) introduction.resume(); else prepareQuestion();
   } else if (screen === 'feedback') { storageFlight.resume(); advance.resume(); }
 });
+window.addEventListener('resize', () => fitCandidate(root.querySelector('.candidate')));
+void document.fonts?.ready.then(() => fitCandidate(root.querySelector('.candidate')));
 renderHome();

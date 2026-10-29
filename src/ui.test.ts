@@ -219,11 +219,11 @@ test('updated home copy and presets, numeric variable ticks and language switchi
   try {
     assert.equal(a.doc.querySelector('.home-caption'), null);
     assert.match(a.doc.querySelector('.best-line')!.textContent, /이 설정의 최고 점수/);
-    assert.equal(a.doc.querySelector('#seconds-value')!.textContent, '30초');
+    assert.equal(a.doc.querySelector('#seconds-value')!.textContent, '45초');
     a.click('input[value="medium"]');
-    assert.equal(a.doc.querySelector('#seconds-value')!.textContent, '20초');
+    assert.equal(a.doc.querySelector('#seconds-value')!.textContent, '30초');
     a.click('input[value="hard"]');
-    assert.equal(a.doc.querySelector('#seconds-value')!.textContent, '12초');
+    assert.equal(a.doc.querySelector('#seconds-value')!.textContent, '20초');
     assert.deepEqual([...a.doc.querySelector('#variables')!.parentElement!.querySelectorAll('.slider-bounds span')].map(n => n.textContent), ['1', '2', '3']);
     a.slide('#seconds', 47); a.slide('#variables', 2); a.click('#language');
     assert.equal(a.doc.documentElement.lang, 'en');
@@ -278,18 +278,19 @@ test('language preference persists, an explicit language link wins, and unsuppor
     try {assert.equal(a.doc.documentElement.lang, expected);} finally {await a.close();}
   }
 });
-test('changed presets never mix old-time best scores into new-time settings', async () => {
+test('easier rules keep best scores separate from old rules', async () => {
   const a = app(8241, 'ko', {
     'equivalence-best-v6-endless-easy':'9000',
     'equivalence-best-v6-endless-medium':'7000',
     'equivalence-best-v7-custom-1-30':'123',
     'equivalence-best-v8-config-1-30':'200',
+    'equivalence-best-v9-config-1-45':'321',
   });
   try {
-    assert.equal(a.doc.querySelector('#best-score')!.textContent, '200');
-    a.slide('#seconds', 18); assert.equal(a.doc.querySelector('#best-score')!.textContent, '9,000');
+    assert.equal(a.doc.querySelector('#best-score')!.textContent, '321');
+    a.slide('#seconds', 18); assert.equal(a.doc.querySelector('#best-score')!.textContent, '0');
     a.click('input[value="medium"]'); assert.equal(a.doc.querySelector('#best-score')!.textContent, '0');
-    a.slide('#seconds', 15); assert.equal(a.doc.querySelector('#best-score')!.textContent, '7,000');
-    a.click('#language'); assert.equal(a.doc.querySelector('#best-score')!.textContent, '7,000');
+    a.slide('#seconds', 15); assert.equal(a.doc.querySelector('#best-score')!.textContent, '0');
+    a.click('#language'); assert.equal(a.doc.querySelector('#best-score')!.textContent, '0');
   } finally {await a.close();}
 });

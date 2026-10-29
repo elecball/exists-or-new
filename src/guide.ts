@@ -14,7 +14,7 @@ export function guideMarkup(seconds:number) {
     </section>
     <section><h3>03 · 기록은 계속 자랍니다</h3>
       <p>처음에는 변수만 있습니다. <strong>${CONSTANT_INTERVAL}라운드마다 무작위 상수</strong>가, <strong>${MAPPING_INTERVAL}라운드마다 새로운 입력 열</strong>이 추가됩니다. 추가 애니메이션이 끝나면 다음 문제의 시간이 시작됩니다.</p>
-      <p>새로운 식은 기록으로 들어가고, 이미 있는 식은 처음 보관한 대표만 남깁니다. 오답이어도 실제 판정에 따라 기록을 처리합니다. 버린 식은 입력이 늘어나도 되살아나지 않습니다.</p>
+      <p>새로운 식은 기록으로 들어가고, 동치인 식이 더 짧으면 대표를 교체합니다. 길이가 같으면 기존 대표를 유지합니다. 오답이어도 실제 판정에 따라 기록을 처리합니다. 버린 식은 입력이 늘어나도 되살아나지 않습니다.</p>
     </section>
     <section><h3>04 · 세 번의 기회</h3>
       <p>한 문제에 <strong>${seconds}초</strong>. 오답이나 시간 초과로 목숨을 하나 잃고, 세 번 잃으면 게임이 끝납니다. 라운드 수에는 제한이 없습니다.</p>
@@ -32,7 +32,7 @@ export function guideMarkup(seconds:number) {
     </section>
     <section><h3>03 · A growing archive</h3>
       <p>You start with variables only. A <strong>random constant arrives every ${CONSTANT_INTERVAL} completed rounds</strong>, and a <strong>new input column every ${MAPPING_INTERVAL}</strong>. The next timer starts after the arrival animation.</p>
-      <p>New expressions enter the archive. Matching expressions leave the first representative in place. The archive follows the actual answer even if you are wrong. Discarded expressions are not restored when inputs grow.</p>
+      <p>New expressions enter the archive. A shorter matching expression replaces its representative; ties keep the existing one. The archive follows the actual answer even if you are wrong. Discarded expressions are not restored when inputs grow.</p>
     </section>
     <section><h3>04 · Three chances</h3>
       <p>You have <strong>${seconds} seconds</strong> per round. A wrong answer or timeout costs one life. Lose all three and the game ends. There is no round limit.</p>

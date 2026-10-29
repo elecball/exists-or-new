@@ -1,15 +1,15 @@
 import { ExactOutputIndex } from './output-index.ts';
 import { sampleCombinationIndices } from './candidate-sampling.ts';
-import { binary, combine, constant, formatComposition, nonzeroConstant, normalize, nodeCount, Rational, variable, withinLimits, type Expr, type Operator, type Polynomial, type Variable } from './math.ts';
+import { binary, combine, constant, format, formatComposition, nonzeroConstant, normalize, nodeCount, Rational, variable, withinLimits, type Expr, type Operator, type Polynomial, type Variable } from './math.ts';
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export interface DifficultySettings {
   name: string; variables: Variable[]; seconds: number; inputBound: number; constantBound: number;
   maxLength: number; maxNodes: number; maxDegree: number; maxCoefficient: number; maxOutput: number;
 }
 export const difficulties: Record<Difficulty, DifficultySettings> = {
-  easy: { name: '쉬움', variables: ['x'], seconds: 30, inputBound: 2, constantBound: 2, maxLength: 28, maxNodes: 7, maxDegree: 2, maxCoefficient: 16, maxOutput: 24 },
-  medium: { name: '중간', variables: ['x', 'y'], seconds: 20, inputBound: 3, constantBound: 3, maxLength: 40, maxNodes: 11, maxDegree: 2, maxCoefficient: 36, maxOutput: 96 },
-  hard: { name: '어려움', variables: ['x', 'y', 'z'], seconds: 12, inputBound: 4, constantBound: 4, maxLength: 60, maxNodes: 19, maxDegree: 3, maxCoefficient: 128, maxOutput: 512 },
+  easy: { name: '쉬움', variables: ['x'], seconds: 45, inputBound: 2, constantBound: 2, maxLength: 22, maxNodes: 5, maxDegree: 2, maxCoefficient: 8, maxOutput: 16 },
+  medium: { name: '중간', variables: ['x', 'y'], seconds: 30, inputBound: 2, constantBound: 2, maxLength: 28, maxNodes: 7, maxDegree: 2, maxCoefficient: 16, maxOutput: 36 },
+  hard: { name: '어려움', variables: ['x', 'y', 'z'], seconds: 20, inputBound: 3, constantBound: 3, maxLength: 34, maxNodes: 9, maxDegree: 2, maxCoefficient: 24, maxOutput: 64 },
 };
 export const STARTING_LIVES = 3;
 export const timeTone = (remaining:number, seconds:number) => remaining <= seconds / 4 ? 'critical' : remaining <= seconds / 2 ? 'warning' : 'normal';
@@ -59,7 +59,7 @@ export interface Question {
   left: Entry; right: Entry; op: Operator; expr: Expr; polynomial: Polynomial;
   matchId: number | null; mappings: readonly InputMapping[]; outputs: Rational[];
 }
-export interface Answer { question: Question; choice: boolean | null; correct: boolean; earned: number }
+export interface Answer { question: Question; choice: boolean | null; correct: boolean; earned: number; replaced: Entry | null }
 export interface Session { lives: number; difficulty: Difficulty; settings: DifficultySettings; records: Entry[]; mappings: InputMapping[]; answers: Answer[]; score: number; streak: number; recent: string[]; constantEvents: ConstantEvent[] }
 export function evaluate(expr: Expr, input: InputMapping): Rational {
   if (expr.kind === 'constant') return expr.value;
@@ -99,7 +99,23 @@ export function addScheduledMappings(s: Session, random = Math.random): void {
   const due = 1 + Math.floor(s.answers.length / MAPPING_INTERVAL);
   while (s.mappings.length < due) s.mappings.push(randomMapping(s.settings, s.mappings, random));
 }
-/** Add scheduled constants once, retaining the earliest representative under current inputs. */
+/** Retain the shortest encountered representative, preserving its slot and immutable snapshots. */
+function retainExpression(s: Session, expr: Expr, polynomial: Polynomial, mappings: readonly InputMapping[]) {
+  const index = s.records.findIndex(r => equivalentOnMappings(r.expr, expr, mappings));
+  if (index < 0) {
+    const entry = {id: Math.max(...s.records.map(r => r.id)) + 1, expr, polynomial};
+    s.records.push(entry);
+    return {entry, added:true, replaced:null};
+  }
+  const before = s.records[index];
+  if (format(expr).length < format(before.expr).length) {
+    const entry = {id:before.id, expr, polynomial};
+    s.records[index] = entry;
+    return {entry, added:false, replaced:before};
+  }
+  return {entry:before, added:false, replaced:null};
+}
+/** Scheduled constants follow the same shortest-representative rule as candidates. */
 export function addScheduledConstants(s: Session, random = Math.random): void {
   const due = Math.floor(s.answers.length / CONSTANT_INTERVAL);
   while (s.constantEvents.length < due) {
@@ -110,10 +126,8 @@ export function addScheduledConstants(s: Session, random = Math.random): void {
     const novel = available.filter(value => !s.records.some(r => equivalentOnMappings(r.expr, constant(value), s.mappings)));
     const value = pick(novel.length ? novel : available, random);
     const expr = constant(value);
-    const existing = s.records.find(r => equivalentOnMappings(r.expr, expr, s.mappings));
-    const entry = existing ?? { id: Math.max(...s.records.map(r => r.id)) + 1, expr, polynomial: normalize(expr) };
-    if (!existing) s.records.push(entry);
-    s.constantEvents.push({ round, value, entryId: entry.id, added: !existing });
+    const {entry, added} = retainExpression(s, expr, normalize(expr), s.mappings);
+    s.constantEvents.push({ round, value, entryId: entry.id, added });
   }
 }
 const signature = (q: Question) => `${q.left.id}:${q.op}:${q.right.id}`;
@@ -159,19 +173,26 @@ export function generateQuestion(s: Session, random = Math.random): Question {
     const q: Question = { left, right, op, expr, polynomial, matchId, mappings: [...s.mappings], outputs };
     if (!s.recent.includes(signature(q))) (matchId === null ? novel : duplicates).push(q);
   }
-  const duplicateCount = s.answers.filter(a => a.question.matchId !== null).length;
-  const targetDuplicate = duplicateCount < Math.floor((s.answers.length + 1) / 2) || (s.answers.length % 2 === 0 && random() < 0.5);
+  // Independent draws avoid revealing the next answer through forced pair balancing.
+  const targetDuplicate = random() < 0.55;
   const preferred = targetDuplicate ? duplicates : novel;
-  const pool = preferred.length ? preferred : [...duplicates, ...novel];
+  let pool = preferred.length ? preferred : [...duplicates, ...novel];
   if (!pool.length) {
     const left = s.records[0], zero = s.records.find(r => r.polynomial.size === 0);
     return makeQuestion(s, left, zero ?? left, zero ? '+' : '-');
   }
+  // Keep the opening gentle, then allow a little more structure without long nests.
+  const opening = s.answers.length < 10 ? pool.filter(q => nodeCount(q.expr) <= 5) : [];
+  if (opening.length) pool = opening;
+  const shortest = Math.min(...pool.map(q => formatComposition(q.expr).length));
+  pool = pool.filter(q => formatComposition(q.expr).length <= shortest + 8);
   const weights = pool.map(q => {
-    const base = isIdentity(q) ? 0.08 : nonzeroConstant(q.left.polynomial) && nonzeroConstant(q.right.polynomial) ? 0.4 : 1;
+    const base = isIdentity(q) ? 0.15 : nonzeroConstant(q.left.polynomial) && nonzeroConstant(q.right.polynomial) ? 0.4 : 1;
     // Measure the displayed AST, including grouping; never replace the chosen expression.
     const length = formatComposition(q.expr).length;
-    return base * (8 / (8 + length)) ** 2.5;
+    const match = q.matchId === null ? undefined : s.records.find(r => r.id === q.matchId);
+    const lookupLength = match ? formatComposition(match.expr).length : 0;
+    return base * (8 / (8 + length)) ** 4 * (8 / (8 + lookupLength));
   });
   let ticket = random() * weights.reduce((a, b) => a + b, 0);
   return pool.find((_, i) => (ticket -= weights[i]) < 0) ?? pool[pool.length - 1];
@@ -183,10 +204,8 @@ export function submitAnswer(s: Session, q: Question, choice: boolean | null, re
   const correct = choice !== null && choice === (q.matchId !== null);
   const seconds = s.settings.seconds;
   const earned = correct ? 100 + Math.ceil(Math.min(seconds, Math.max(0, remaining)) / seconds * 100) : 0;
-  const answer: Answer = { question: q, choice, correct, earned };
-  if (q.matchId === null && !s.records.some(r => equivalentOnMappings(r.expr, q.expr, q.mappings))) {
-    s.records.push({ id: Math.max(...s.records.map(r => r.id)) + 1, expr: q.expr, polynomial: q.polynomial });
-  }
+  const {replaced} = retainExpression(s, q.expr, q.polynomial, q.mappings);
+  const answer: Answer = { question: q, choice, correct, earned, replaced };
   if (!correct) s.lives = Math.max(0, s.lives - 1);
   s.score += earned; s.streak = correct ? s.streak + 1 : 0;
   s.answers.push(answer); s.recent.push(signature(q));

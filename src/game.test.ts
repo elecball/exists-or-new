@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSession, isGameOver, generateQuestion, makeQuestion, submitAnswer, initialRecords, addScheduledMappings, addScheduledConstants, evaluate, equivalentOnMappings, outputsFor, sameOutputs, inputMapping, difficulties, INPUT_BOUND, CONSTANT_BOUND, withinDifficultyLimits, timeTone, type Difficulty } from './game.ts';
-import { equal, normalize, withinLimits, binary, constant, variable, Rational, formatComposition } from './math.ts';
+import { equal, normalize, withinLimits, binary, constant, variable, Rational, formatComposition, nodeCount } from './math.ts';
 const TEST_ROUNDS = 12;
 function rng(seed: number) { return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; }; }
 test('each difficulty starts with one input mapping; initial representatives are only its variables', () => {
@@ -30,7 +30,6 @@ test('all input coordinates and mappings participate, with exact rational output
 test('seeded full games: sampled answers, actual operands, bounded expressions and consistent archive', () => {
   for (const d of ['easy', 'medium', 'hard'] as Difficulty[]) for (let seed = 1; seed <= 12; seed++) {
     const random = rng(seed), s = createSession(d, random);
-    let duplicateCount = 0;
     for (let round = 0; round < TEST_ROUNDS; round++) {
       const q = generateQuestion(s, random), before = s.records.length;
       assert.equal(q.mappings.length, 1 + Math.floor(round / 10));
@@ -43,7 +42,6 @@ test('seeded full games: sampled answers, actual operands, bounded expressions a
       assert.ok(sameOutputs(q.outputs, outputsFor(q.expr, q.mappings)));
       const match = s.records.find(r => equivalentOnMappings(r.expr, q.expr, q.mappings));
       assert.equal(q.matchId, match?.id ?? null);
-      if (q.matchId !== null) duplicateCount++;
       const a = submitAnswer(s, q, round === 1 ? !(q.matchId !== null) : q.matchId !== null, 5);
       assert.equal(a.correct, round !== 1);
       assert.equal(s.records.length, before + (match ? 0 : 1));
@@ -54,9 +52,32 @@ test('seeded full games: sampled answers, actual operands, bounded expressions a
       assert.equal(s.records.length, after);
       for (let i = 0; i < s.records.length; i++) for (let j = i + 1; j < s.records.length; j++) assert.equal(equivalentOnMappings(s.records[i].expr, s.records[j].expr, s.mappings), false);
     }
-    assert.ok(duplicateCount >= 4 && duplicateCount <= 8, `unbalanced ${d}, ${seed}: ${duplicateCount}`);
     assert.ok(s.score > 0);
     assert.equal(s.lives, 2);
+  }
+});
+test('gentler games stay short and varied without predictable opposite-answer pairs', () => {
+  for (const difficulty of ['easy', 'medium', 'hard'] as Difficulty[]) {
+    let duplicates = 0, oppositePairs = 0, totalLength = 0;
+    const operators = new Set<string>();
+    for (let seed = 1; seed <= 12; seed++) {
+      const random = rng(seed), s = createSession(difficulty, random);
+      let previous = false;
+      for (let round = 0; round < 50; round++) {
+        const q = generateQuestion(s, random), duplicate = q.matchId !== null;
+        assert.ok(withinDifficultyLimits(q.expr, q.polynomial, s.settings));
+        if (round < 10) assert.ok(nodeCount(q.expr) <= 5);
+        if (round % 2 && duplicate !== previous) oppositePairs++;
+        if (duplicate) duplicates++;
+        previous = duplicate;
+        operators.add(q.op); totalLength += formatComposition(q.expr).length;
+        submitAnswer(s, q, duplicate, s.settings.seconds);
+      }
+    }
+    assert.ok(duplicates > 600 * .35 && duplicates < 600 * .7, `Answer distribution: ${duplicates}/600`);
+    assert.ok(oppositePairs > 300 * .3 && oppositePairs < 300 * .7, `Opposite pairs: ${oppositePairs}/300`);
+    assert.ok(totalLength / 600 < 11, `Mean displayed length: ${totalLength / 600}`);
+    assert.deepEqual([...operators].sort(), ['*', '+', '-']);
   }
 });
 test('correctness, timeout and scoring follow mapping equivalence', () => {
@@ -64,11 +85,11 @@ test('correctness, timeout and scoring follow mapping equivalence', () => {
   s.mappings = [inputMapping(1, 2, 3)];
   const q = makeQuestion(s, x, x, '*'); // x² ~ x only on currently public input.
   const a = submitAnswer(s, q, true, 4.21);
-  assert.equal(a.correct, true); assert.equal(a.earned, 115); assert.equal(s.streak, 1);
+  assert.equal(a.correct, true); assert.equal(a.earned, 110); assert.equal(s.streak, 1);
   assert.equal(s.records.length, 1); assert.equal(s.records[0], x);
   const next = generateQuestion(s, rng(8));
   assert.equal(submitAnswer(s, next, null, 0).correct, false);
-  assert.equal(s.streak, 0); assert.equal(s.score, 115);
+  assert.equal(s.streak, 0); assert.equal(s.score, 110);
 });
 test('fallback works even when there is no zero representative', () => {
   const s = createSession('easy');
@@ -89,7 +110,7 @@ test('mappings remain unchanged for ten rounds and grow once before round eleven
     assert.equal(s.mappings.length, length);
   }
 });
-test('only the first representative survives; added mappings do not restore discarded candidates', () => {
+test('one representative survives; added mappings do not restore discarded candidates', () => {
   const s = createSession('easy'), x = s.records[0];
   s.mappings = [inputMapping(1, 2, 3)];
   const discarded = makeQuestion(s, x, x, '*');
@@ -111,6 +132,65 @@ test('only the first representative survives; added mappings do not restore disc
   const a = submitAnswer(s, rediscovered, true, 5); // Wrong answer still stores the new representative.
   assert.equal(a.correct, false);
   assert.equal(s.records.length, before.length + 1);
+});
+test('a shorter observational match replaces the same slot even after a wrong answer or timeout', () => {
+  for (const choice of [true, false, null]) {
+    const s = createSession('medium', rng(1));
+    s.mappings = [inputMapping(2, 3, 0)];
+    const [x, y] = s.records;
+    const expr = binary('-', binary('+', x.expr, y.expr), binary('-', y.expr, x.expr));
+    const old = {id:3, expr, polynomial:normalize(expr)};
+    s.records.push(old);
+    const history = makeQuestion(s, old, x, '+');
+    const q = makeQuestion(s, x, x, '*'); // x² and 2x coincide only on the revealed x=2.
+    assert.equal(q.matchId, old.id);
+    const a = submitAnswer(s, q, choice, 10);
+    assert.equal(a.correct, choice === true);
+    assert.equal(a.replaced, old);
+    assert.equal(s.records.length, 3);
+    assert.equal(s.records[2].id, old.id);
+    assert.equal(s.records[2].expr, q.expr);
+    assert.ok(equal(s.records[2].polynomial, normalize(q.expr)));
+    assert.equal(history.left, old); // History and operand ASTs must never be mutated.
+    assert.ok(equal(history.left.polynomial, normalize(expr)));
+    assert.equal(submitAnswer(s, q, true, 10), a);
+    s.mappings.push(inputMapping(3, 4, 0));
+    assert.equal(makeQuestion(s, x, x, '+').matchId, null);
+    assert.deepEqual(q.outputs.map(value => value.toString()), ['4']);
+    assert.equal(s.records.some(r => r === old), false);
+  }
+});
+test('ties and longer matches keep the existing representative', () => {
+  const s = createSession('medium', rng(3)), [x, y] = s.records;
+  s.mappings = [inputMapping(1, 2, 0), inputMapping(2, 3, 0)];
+  const first = makeQuestion(s, x, y, '+');
+  submitAnswer(s, first, false, 10);
+  const representative = s.records.at(-1);
+  const tie = makeQuestion(s, y, x, '+');
+  assert.equal(submitAnswer(s, tie, true, 10).replaced, null);
+  assert.equal(s.records.at(-1), representative);
+  const longer = makeQuestion(s, representative!, x, '-'); // (x+y)-x = y
+  assert.equal(submitAnswer(s, longer, true, 10).replaced, null);
+  assert.equal(s.records[1], y);
+});
+test('an arriving constant also replaces a longer matching representative without adding a slot', () => {
+  const s = createSession('easy', rng(5)), x = s.records[0];
+  s.mappings = [inputMapping(2, 0, 0)];
+  const zero = makeQuestion(s, x, x, '-');
+  submitAnswer(s, zero, false, 0);
+  const old = s.records.at(-1)!;
+  for (const value of [-2, -1, 1]) {
+    const expr = constant(value); s.records.push({id:s.records.length + 1, expr, polynomial:normalize(expr)});
+  }
+  while (s.answers.length < 6) {
+    const q = makeQuestion(s, x, x, '*'); submitAnswer(s, q, q.matchId !== null, 0);
+  }
+  const before = s.records.length;
+  addScheduledConstants(s, () => .5);
+  assert.equal(s.records.length, before);
+  assert.equal(s.records.find(r => r.id === old.id)!.expr.kind, 'constant');
+  assert.deepEqual(s.constantEvents[0], {round:7, value:0, entryId:old.id, added:false});
+  assert.equal(old.expr, zero.expr);
 });
 
 test('initial inputs vary across games, include signs, and retain distinct variable representatives', () => {
@@ -263,8 +343,8 @@ test('difficulty eases mental arithmetic and scales the time bonus to each round
     const q = generateQuestion(s, random);
     assert.equal(submitAnswer(s, q, q.matchId !== null, settings.seconds).earned, 200);
   }
-  assert.equal(difficulties.easy.seconds, 30);
-  assert.equal(difficulties.medium.seconds, 20);
+  assert.equal(difficulties.easy.seconds, 45);
+  assert.equal(difficulties.medium.seconds, 30);
   const square = binary('*', variable('x'), variable('x'));
   const cube = binary('*', square, variable('x'));
   assert.ok(withinDifficultyLimits(square, normalize(square), 'easy'));
@@ -312,7 +392,7 @@ test('custom time and variable count override either preset independently, inclu
       assert.equal(s.lives, 3);
     }
     assert.equal(s.mappings.length, 2);
-    assert.equal(difficulties.hard.seconds, 12);
+    assert.equal(difficulties.hard.seconds, 20);
     assert.equal(difficulties.hard.variables.length, 3);
   }
 });
@@ -327,6 +407,8 @@ test('custom settings reject invalid times and variable counts before starting a
 
 test('large archives can generate with recent as well as old representatives, checking answers against the whole archive', () => {
   const s = createSession('hard', rng(1));
+  // This synthetic archive uses longer representatives than the playable presets.
+  s.settings = {...s.settings, maxLength:60, maxNodes:19, maxCoefficient:128, maxOutput:512};
   s.mappings = [inputMapping(1, 0, 0), inputMapping(2, 0, 0)];
   s.records = [];
   for (let a = -4; a <= 4; a++) for (let b = -8; b <= 8; b++) {

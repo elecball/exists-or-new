@@ -185,6 +185,21 @@ test('an existing expression is absorbed into its representative, with a pausabl
     assert.equal(completed, 1);
   } finally {transition.cancel(); f.restore();}
 });
+test('a shorter representative appears on arrival, before the card pulse', async () => {
+  const f = fixture(); let completed = 0;
+  const transition = new AdditionTransition();
+  try {
+    f.targets[0].innerHTML = 'long expression';
+    const run = transition.absorb(f.puzzle as unknown as HTMLElement, f.targets[0] as unknown as HTMLElement,
+      () => completed++, () => { f.targets[0].innerHTML = 'short'; });
+    assert.equal(f.targets[0].innerHTML, 'long expression');
+    f.animations[0].finish(); f.animations[1].finish(); await flush();
+    assert.equal(f.targets[0].innerHTML, 'short');
+    assert.equal(completed, 0);
+    f.animations[2].finish(); await run;
+    assert.equal(completed, 1);
+  } finally {transition.cancel(); f.restore();}
+});
 test('leaving during absorption removes the ghost and prevents stale completion', async () => {
   const f = fixture(); let completed = 0;
   const transition = new AdditionTransition();

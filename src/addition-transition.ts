@@ -37,7 +37,7 @@ export class AdditionTransition {
     ghost.style.boxSizing = 'border-box';
   }
   /** A discarded candidate converges on its existing representative without adding a card. */
-  async absorb(source: HTMLElement, representative: HTMLElement, done: () => void) {
+  async absorb(source: HTMLElement, representative: HTMLElement, done: () => void, onArrive = () => {}) {
     this.cancel(); this.paused = false; this.running = true;
     const generation = this.generation;
     const valid = () => generation === this.generation && this.running;
@@ -67,13 +67,14 @@ export class AdditionTransition {
       ]);
       if (!valid()) return;
       source.style.opacity = '0'; ghost.remove(); this.ghosts.delete(ghost);
+      onArrive();
       await this.animate(representative, reduced
         ? [{opacity:1}, {opacity:.65}, {opacity:1}]
         : [{transform:'scale(1)'}, {transform:'scale(1.07)'}, {transform:'scale(1)'}], reduced ? 120 : 300);
       if (!valid()) return;
       this.running = false; done();
     } catch {
-      if (valid()) { this.cancel(); done(); }
+      if (valid()) { this.cancel(); onArrive(); done(); }
     }
   }
   async store(source: HTMLElement, target: ArrivalTarget, done: () => void) {

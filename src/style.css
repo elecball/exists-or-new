@@ -78,7 +78,7 @@ h1 { font-size: 48px; line-height: 1.2; letter-spacing: -2px; margin: 0 0 19px; 
 .record.representative { border: 2px solid #4b6c35; background: #dce9c7; }
 .record-tag { position: absolute; right: 5px; top: 4px; font: 8px system-ui, sans-serif; color: #66814d; }
 .puzzle { padding: 53px 0 0; }
-.candidate { display: grid; grid-template-columns: minmax(0, 1fr) 50px minmax(0, 1fr); gap: 8px; align-items: center; min-height: 155px; margin-bottom: 38px; }
+.candidate { display: flex; justify-content: center; gap: 8px; align-items: center; min-height: 155px; margin-bottom: 38px; }
 .operand { min-width: 0; text-align: center; position: relative; padding: 20px 8px; align-self: stretch; display: flex; align-items: center; justify-content: center; }
 .operand-expression { line-height: 1.5; overflow-wrap: anywhere; width: 100%; }
 .operand-expression.long { font-size: 31px; }
@@ -189,6 +189,9 @@ sup { font-size: .6em; line-height: 0; vertical-align: super; }
 }
 .operand-expression { font-size: clamp(30px, 4.5vw, 54px); }
 @media(max-width:600px) { .operand-expression { font-size: 32px; } .operand-expression.long { font-size: 23px; } }
+.candidate .operand { flex: 0 1 auto; padding-inline: 0; }
+.candidate .operand-expression { width: auto; font-size: calc(clamp(30px, 4.5vw, 54px) * var(--formula-scale, 1)); }
+.candidate .operator { flex: none; font-size: calc(42px * var(--formula-scale, 1)); }
 .lives { position: relative; display: inline-flex; flex-direction: column; gap: 0; padding: 3px 0 6px; }
 .life-hearts { display: inline-flex; gap: 3px; }
 .life-slot { display: inline-block; position: relative; }
