@@ -1,6 +1,6 @@
 import { ExactOutputIndex } from './output-index.ts';
 import { sampleCombinationIndices } from './candidate-sampling.ts';
-import { binary, combine, constant, format, formatComposition, nonzeroConstant, normalize, nodeCount, Rational, variable, withinLimits, type Expr, type Operator, type Polynomial, type Variable } from './math.ts';
+import { binary, combine, constant, format, formatComposition, nonzeroConstant, normalize, nodeCount, variable, withinLimits, type Expr, type Operator, type Polynomial, type Variable } from './math.ts';
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export interface DifficultySettings {
   name: string; variables: Variable[]; seconds: number; inputBound: number; constantBound: number;
@@ -18,9 +18,9 @@ export const CONSTANT_INTERVAL = 6;
 export const GAME_OPERATORS: Operator[] = ['+', '-', '*'];
 export const CONSTANT_BOUND = 4;
 export interface ConstantEvent { round: number; value: number; entryId: number; added: boolean }
-export type InputMapping = Readonly<Record<Variable, Rational>>;
+export type InputMapping = Readonly<Record<Variable, bigint>>;
 export const INPUT_BOUND = 4;
-export const inputMapping = (x: number, y: number, z: number): InputMapping => Object.freeze({ x: new Rational(BigInt(x)), y: new Rational(BigInt(y)), z: new Rational(BigInt(z)) });
+export const inputMapping = (x: number, y: number, z: number): InputMapping => Object.freeze({ x: BigInt(x), y: BigInt(y), z: BigInt(z) });
 const valuesWithin = (bound: number) => Array.from({ length: bound * 2 + 1 }, (_, i) => i - bound);
 function pick(values: readonly number[], random: () => number): number {
   return values[Math.min(values.length - 1, Math.max(0, Math.floor(random() * values.length)))];
@@ -36,7 +36,7 @@ function randomMapping(settings: DifficultySettings, previous: readonly InputMap
     const take = () => { const value = pick(values, random); values.splice(values.indexOf(value), 1); return value; };
     return inputMapping(take(), take(), take());
   }
-  const isNew = (candidate: InputMapping) => !previous.some(input => vars.every(v => input[v].n === candidate[v].n && input[v].d === candidate[v].d));
+  const isNew = (candidate: InputMapping) => !previous.some(input => vars.every(v => input[v] === candidate[v]));
   for (let attempt = 0; attempt < 24; attempt++) {
     const candidate = inputMapping(pick(inputValues, random), pick(inputValues, random), pick(inputValues, random));
     if (isNew(candidate)) return candidate;
@@ -57,22 +57,22 @@ function randomMapping(settings: DifficultySettings, previous: readonly InputMap
 export interface Entry { id: number; expr: Expr; polynomial: Polynomial }
 export interface Question {
   left: Entry; right: Entry; op: Operator; expr: Expr; polynomial: Polynomial;
-  matchId: number | null; mappings: readonly InputMapping[]; outputs: Rational[];
+  matchId: number | null; mappings: readonly InputMapping[]; outputs: bigint[];
 }
 export interface Answer { question: Question; choice: boolean | null; correct: boolean; earned: number; replaced: Entry | null }
 export interface Session { lives: number; difficulty: Difficulty; settings: DifficultySettings; records: Entry[]; mappings: InputMapping[]; answers: Answer[]; score: number; streak: number; recent: string[]; constantEvents: ConstantEvent[] }
-export function evaluate(expr: Expr, input: InputMapping): Rational {
+export function evaluate(expr: Expr, input: InputMapping): bigint {
   if (expr.kind === 'constant') return expr.value;
   if (expr.kind === 'variable') return input[expr.name];
   const a = evaluate(expr.left, input), b = evaluate(expr.right, input);
-  if (expr.op === '+') return a.add(b);
-  if (expr.op === '-') return a.add(b.neg());
-  if (expr.op === '*') return a.mul(b);
+  if (expr.op === '+') return a + b;
+  if (expr.op === '-') return a - b;
+  if (expr.op === '*') return a * b;
   throw new Error('지원하지 않는 연산입니다.');
 }
 export const outputsFor = (expr: Expr, mappings: readonly InputMapping[]) => mappings.map(input => evaluate(expr, input));
-export function sameOutputs(a: readonly Rational[], b: readonly Rational[]): boolean {
-  return a.length === b.length && a.every((value, i) => value.n === b[i].n && value.d === b[i].d);
+export function sameOutputs(a: readonly bigint[], b: readonly bigint[]): boolean {
+  return a.length === b.length && a.every((value, i) => value === b[i]);
 }
 export const equivalentOnMappings = (a: Expr, b: Expr, mappings: readonly InputMapping[]) => sameOutputs(outputsFor(a, mappings), outputsFor(b, mappings));
 export function initialRecords(d: Difficulty, variables = difficulties[d].variables): Entry[] {
@@ -147,7 +147,7 @@ export function withinDifficultyLimits(expr: Expr, polynomial: Polynomial, diffi
   const settings = typeof difficulty === 'string' ? difficulties[difficulty] : difficulty;
   return withinLimits(expr, polynomial) && formatComposition(expr).length <= settings.maxLength && nodeCount(expr) <= settings.maxNodes &&
     [...polynomial].every(([key, coefficient]) => key.split(',').map(Number).reduce((a, b) => a + b, 0) <= settings.maxDegree &&
-      (coefficient.n < 0n ? -coefficient.n : coefficient.n) <= BigInt(settings.maxCoefficient) * coefficient.d);
+      (coefficient < 0n ? -coefficient : coefficient) <= BigInt(settings.maxCoefficient));
 }
 /** Bounded pool; every candidate uses actual current representatives. */
 export function generateQuestion(s: Session, random = Math.random): Question {
@@ -166,9 +166,9 @@ export function generateQuestion(s: Session, random = Math.random): Question {
     const polynomial = combine(op, left.polynomial, right.polynomial), expr = binary(op, left.expr, right.expr);
     if (!withinDifficultyLimits(expr, polynomial, s.settings)) continue;
     const outputs = vectors.get(left.id)!.map((a, i) => {
-      const b = vectors.get(right.id)![i]; return op === '+' ? a.add(b) : op === '-' ? a.add(b.neg()) : a.mul(b);
+      const b = vectors.get(right.id)![i]; return op === '+' ? a + b : op === '-' ? a - b : a * b;
     });
-    if (outputs.some(w => (w.n < 0n ? -w.n : w.n) > BigInt(s.settings.maxOutput) * w.d)) continue;
+    if (outputs.some(w => (w < 0n ? -w : w) > BigInt(s.settings.maxOutput))) continue;
     const matchId = representatives.find(outputs);
     const q: Question = { left, right, op, expr, polynomial, matchId, mappings: [...s.mappings], outputs };
     if (!s.recent.includes(signature(q))) (matchId === null ? novel : duplicates).push(q);

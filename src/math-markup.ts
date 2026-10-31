@@ -5,12 +5,12 @@ const parentheses = (markup: string) => `<mrow><mo>(</mo>${markup}<mo>)</mo></mr
 function node(expr: Expr): string {
   if (expr.kind === 'variable') return `<mi mathvariant="italic">${expr.name}</mi>`;
   if (expr.kind === 'constant') {
-    const magnitude = expr.value.n < 0n ? -expr.value.n : expr.value.n;
-    const value = expr.value.d === 1n ? `<mn>${magnitude}</mn>` : `<mfrac><mn>${magnitude}</mn><mn>${expr.value.d}</mn></mfrac>`;
-    return expr.value.n < 0n ? `<mrow><mo>−</mo>${value}</mrow>` : value;
+    const magnitude = expr.value < 0n ? -expr.value : expr.value;
+    const value = `<mn>${magnitude}</mn>`;
+    return expr.value < 0n ? `<mrow><mo>−</mo>${value}</mrow>` : value;
   }
   const child = (part: Expr, right: boolean) => {
-    const grouped = precedence(part) < precedence(expr) || (right && expr.op === '-' && precedence(part) === precedence(expr)) || (part.kind === 'constant' && part.value.n < 0n);
+    const grouped = precedence(part) < precedence(expr) || (right && expr.op === '-' && precedence(part) === precedence(expr)) || (part.kind === 'constant' && part.value < 0n);
     return grouped ? parentheses(node(part)) : node(part);
   };
   const operator = expr.op === '*' ? '×' : expr.op === '-' ? '−' : '+';
@@ -18,6 +18,6 @@ function node(expr: Expr): string {
 }
 /** Native MathML gives variables, operators and parentheses their proper mathematical forms. */
 export function renderMath(expr: Expr, asOperand = false): string {
-  const grouped = asOperand && (expr.kind === 'binary' || (expr.kind === 'constant' && expr.value.n < 0n));
+  const grouped = asOperand && (expr.kind === 'binary' || (expr.kind === 'constant' && expr.value < 0n));
   return `<math class="formula" aria-label="${escapeHtml(format(expr))}">${grouped ? parentheses(node(expr)) : node(expr)}</math>`;
 }

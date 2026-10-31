@@ -18,8 +18,7 @@ test('subtraction grouping and composed operands stay explicit in MathML', () =>
   assert.equal((grouped.match(/<mo>\(<\/mo>/g) ?? []).length, 2);
   assert.equal((grouped.match(/<mo>\)<\/mo>/g) ?? []).length, 2);
 });
-test('fraction coefficients have a proper mathematical numerator and denominator', () => {
-  const markup = renderMath(constant(-1, 3));
-  assert.match(markup, /<mfrac><mn>1<\/mn><mn>3<\/mn><\/mfrac>/);
-  assert.match(markup, /<mo>−<\/mo>/);
+test('large negative integer constants keep every digit in MathML', () => {
+  const markup=renderMath(constant(-9007199254740993n));
+  assert.match(markup,/<mn>9007199254740993<\/mn>/);assert.match(markup,/<mo>−<\/mo>/);
 });

@@ -67,7 +67,7 @@ function candidatePool(s:QueueSession,base:Entry[],random:()=>number):Candidate 
     const expr=binary(op,left.expr,right.expr),polynomial=combine(op,left.polynomial,right.polynomial);
     if(!withinDifficultyLimits(expr,polynomial,s.settings))continue;
     const outputs=outputsFor(expr,s.mappings);
-    if(outputs.some(value=>(value.n<0n?-value.n:value.n)>BigInt(s.settings.maxOutput)*value.d))continue;
+    if(outputs.some(value=>(value<0n?-value:value)>BigInt(s.settings.maxOutput)))continue;
     const candidate={expr,polynomial,left,right,op};
     (s.records.some(entry=>sameOutputs(outputsFor(entry.expr,s.mappings),outputs))?matches:novel).push(candidate);
   }

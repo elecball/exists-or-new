@@ -141,7 +141,7 @@ function refreshInputs(){
   const previous=session!.mappings;updateQueueInput(session!);
   if(previous===session!.mappings)return;
   if(screen==='playing'&&session!.current)question=generateQuestion(session!);
-  newInputIndexes=session!.settings.variables.map((_,i)=>i).filter(i=>{const name=session!.settings.variables[i];return previous[0][name].n!==session!.mappings[0][name].n;});
+  newInputIndexes=session!.settings.variables.map((_,i)=>i).filter(i=>{const name=session!.settings.variables[i];return previous[0][name]!==session!.mappings[0][name];});
   if(newInputIndexes.length){const table=root.querySelector('.input-table-wrap');if(table)table.outerHTML=mappingMarkup();}
   newInputIndexes=[];
 }

@@ -118,11 +118,11 @@ test('arrival intervals decrease from fifteen seconds and never fall below three
 test('input replacements stay in −5…5, can repeat values, and keep one column indefinitely',()=>{
   const initial=new Set<number>();
   for(let seed=0;seed<150;seed++){
-    const random=rng(seed),s=createQueueSession(random);initial.add(Number(s.mappings[0].x.n));
+    const random=rng(seed),s=createQueueSession(random);initial.add(Number(s.mappings[0].x));
     for(let i=0;i<25;i++){
       advanceQueueTime(s,inputSecondsRemaining(s)*1000);updateQueueInput(s,random);
       assert.equal(s.mappings.length,1);
-      assert.ok(s.mappings[0].x.n>=-5n&&s.mappings[0].x.n<=5n);
+      assert.ok(s.mappings[0].x>=-5n&&s.mappings[0].x<=5n);
     }
     assert.equal(inputIntervalSeconds(s),10);assert.equal(s.inputChanges,25);
   }
@@ -130,7 +130,7 @@ test('input replacements stay in −5…5, can repeat values, and keep one colum
 });
 test('occasional constants appear as literal operands, always within −5…5',()=>{
   const random=rng(8721),s=createQueueSession(random);s.mappings=[inputMapping(1,0,0)];
-  const literals=(expr:Expr):number[]=>expr.kind==='constant'?[Number(expr.value.n)]:expr.kind==='variable'?[]:[...literals(expr.left),...literals(expr.right)];
+  const literals=(expr:Expr):number[]=>expr.kind==='constant'?[Number(expr.value)]:expr.kind==='variable'?[]:[...literals(expr.left),...literals(expr.right)];
   let withConstant=0;
   for(let i=0;i<1000;i++){
     const c=createCandidate(s,random),values=literals(c.expr);if(values.length)withConstant++;
@@ -205,7 +205,7 @@ test('one to three variables initialize distinct cards and unique IDs; every inp
     for(let i=0;i<45;i++){
       const previous=s.mappings[0];advanceQueueTime(s,inputSecondsRemaining(s)*1000);updateQueueInput(s,random);
       assert.equal(s.mappings.length,1);
-      for(const name of s.settings.variables)assert.ok(s.mappings[0][name].n>=-5n&&s.mappings[0][name].n<=5n);
+      for(const name of s.settings.variables)assert.ok(s.mappings[0][name]>=-5n&&s.mappings[0][name]<=5n);
       const c=createCandidate(s,random);assert.ok(withinDifficultyLimits(c.expr,c.polynomial,s.settings));
     }
   }

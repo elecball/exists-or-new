@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSession, isGameOver, generateQuestion, makeQuestion, submitAnswer, initialRecords, addScheduledMappings, addScheduledConstants, evaluate, equivalentOnMappings, outputsFor, sameOutputs, inputMapping, difficulties, INPUT_BOUND, CONSTANT_BOUND, withinDifficultyLimits, timeTone, type Difficulty } from './game.ts';
-import { equal, normalize, withinLimits, binary, constant, variable, Rational, formatComposition, nodeCount } from './math.ts';
+import { equal, normalize, withinLimits, binary, constant, variable, formatComposition, nodeCount } from './math.ts';
 const TEST_ROUNDS = 12;
 function rng(seed: number) { return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; }; }
 test('each difficulty starts with one input mapping; initial representatives are only its variables', () => {
@@ -19,13 +19,13 @@ test('finite mapping equivalence: x and x² match at 1, but not across 1 and 2',
   assert.equal(equivalentOnMappings(x, square, [inputMapping(1, 2, 3), inputMapping(2, 3, 4)]), false);
   assert.equal(equal(normalize(x), normalize(square)), false); // Polynomial identity is not the game answer.
 });
-test('all input coordinates and mappings participate, with exact rational outputs', () => {
-  const inputs = [{ x: new Rational(1n, 3n), y: new Rational(-2n), z: new Rational(5n) }];
-  const expr = binary('+', binary('*', variable('x'), constant(3)), binary('-', variable('z'), variable('y')));
-  assert.equal(evaluate(expr, inputs[0]).toString(), '8');
-  assert.equal(evaluate(binary('+', constant(1, 10), constant(2, 10)), inputs[0]).toString(), '3/10');
-  assert.equal(sameOutputs([new Rational(1n), new Rational(2n)], [new Rational(1n), new Rational(3n)]), false);
-  assert.equal(sameOutputs([new Rational(1n)], [new Rational(1n), new Rational(1n)]), false);
+test('all input coordinates and mappings participate, with exact integer outputs', () => {
+  const input={x:9007199254740993n,y:-2n,z:5n};
+  const expr=binary('+',binary('*',variable('x'),constant(3)),binary('-',variable('z'),variable('y')));
+  assert.equal(evaluate(expr,input),27021597764222986n);
+  assert.equal(evaluate(binary('-',variable('x'),constant(9007199254740992n)),input),1n);
+  assert.equal(sameOutputs([1n,2n],[1n,3n]),false);
+  assert.equal(sameOutputs([1n],[1n,1n]),false);
 });
 test('seeded full games: sampled answers, actual operands, bounded expressions and consistent archive', () => {
   for (const d of ['easy', 'medium', 'hard'] as Difficulty[]) for (let seed = 1; seed <= 12; seed++) {
@@ -36,7 +36,7 @@ test('seeded full games: sampled answers, actual operands, bounded expressions a
       assert.ok(s.records.includes(q.left) && s.records.includes(q.right));
       assert.ok(withinLimits(q.expr, q.polynomial));
       assert.ok(withinDifficultyLimits(q.expr, q.polynomial, d));
-      assert.ok(q.outputs.every(w => (w.n < 0n ? -w.n : w.n) <= BigInt(difficulties[d].maxOutput) * w.d));
+      assert.ok(q.outputs.every(w => (w < 0n ? -w : w) <= BigInt(difficulties[d].maxOutput)));
       assert.ok(equal(normalize(q.expr), q.polynomial));
       assert.ok(['+', '-', '*'].includes(q.op));
       assert.ok(sameOutputs(q.outputs, outputsFor(q.expr, q.mappings)));
@@ -197,7 +197,7 @@ test('initial inputs vary across games, include signs, and retain distinct varia
   const seen = new Set<string>();
   for (let seed = 1; seed <= 60; seed++) {
     const s = createSession('hard', rng(seed * 971));
-    const values = difficulties.hard.variables.map(v => s.mappings[0][v].n);
+    const values = difficulties.hard.variables.map(v => s.mappings[0][v]);
     seen.add(values[0].toString());
     assert.equal(new Set(values).size, 3);
     assert.ok(values.every(n => n !== 0n && n >= -BigInt(INPUT_BOUND) && n <= BigInt(INPUT_BOUND)));
@@ -339,7 +339,7 @@ test('surviving twelve rounds no longer ends a game', () => {
 test('difficulty eases mental arithmetic and scales the time bonus to each round duration', () => {
   for (const difficulty of ['easy', 'medium', 'hard'] as Difficulty[]) {
     const random = rng(919), s = createSession(difficulty, random), settings = difficulties[difficulty];
-    assert.ok(Object.values(s.mappings[0]).every(value => value.n >= -BigInt(settings.inputBound) && value.n <= BigInt(settings.inputBound)));
+    assert.ok(Object.values(s.mappings[0]).every(value => value >= -BigInt(settings.inputBound) && value <= BigInt(settings.inputBound)));
     const q = generateQuestion(s, random);
     assert.equal(submitAnswer(s, q, q.matchId !== null, settings.seconds).earned, 200);
   }
