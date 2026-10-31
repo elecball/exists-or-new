@@ -63,14 +63,14 @@ export class AdditionTransition {
           {opacity:1, transform:'none', offset:0},
           {opacity:.8, transform:reduced ? 'none' : `translate(${dx}px, ${dy}px) scale(.35)`, offset:.8},
           {opacity:0, transform:reduced ? 'none' : `translate(${dx}px, ${dy}px) scale(.08)`, offset:1},
-        ], reduced ? 120 : 850),
+        ], reduced ? 120 : 450),
       ]);
       if (!valid()) return;
       source.style.opacity = '0'; ghost.remove(); this.ghosts.delete(ghost);
       onArrive();
       await this.animate(representative, reduced
         ? [{opacity:1}, {opacity:.65}, {opacity:1}]
-        : [{transform:'scale(1)'}, {transform:'scale(1.07)'}, {transform:'scale(1)'}], reduced ? 120 : 300);
+        : [{transform:'scale(1)'}, {transform:'scale(1.07)'}, {transform:'scale(1)'}], reduced ? 120 : 150);
       if (!valid()) return;
       this.running = false; done();
     } catch {
@@ -90,7 +90,7 @@ export class AdditionTransition {
       ghost.setAttribute('aria-hidden', 'true'); ghost.inert = true;
       Object.assign(ghost.style, {
         position: 'absolute', left: `${to.left + window.scrollX}px`, top: `${to.top + window.scrollY}px`,
-        font: getComputedStyle(part).font, width: `${to.width}px`, height: `${to.height}px`,
+        font: getComputedStyle(part).font, color:getComputedStyle(part).color, width: `${to.width}px`, height: `${to.height}px`,
         background: 'transparent', border: '0', padding: '0', margin: '0', boxShadow: 'none',
         transformOrigin: 'center', zIndex: '15', pointerEvents: 'none',
       });
@@ -105,7 +105,7 @@ export class AdditionTransition {
           {opacity:0, transform: reduced ? 'none' : start, offset:0},
           {opacity:1, transform: reduced ? 'none' : start, offset:.15},
           {opacity:1, transform:'translate(0, 0) scale(1)', offset:1},
-        ], reduced ? 120 : 750),
+        ], reduced ? 120 : 450),
       ]);
       if (!valid()) return;
       source.style.opacity = '0';

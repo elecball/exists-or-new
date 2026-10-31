@@ -1,41 +1,12 @@
 import {t} from './i18n.ts';
-import {CONSTANT_INTERVAL, MAPPING_INTERVAL} from './game.ts';
-export function guideMarkup(seconds:number) {
-  return t(`<div class="help-copy">
-    <p class="guide-intro">계산해 보고, 기록에서 찾아보세요.<br>같은 결과를 내는 식은 대표 하나만 남습니다.</p>
-    <section><h3>01 · 두 버튼의 의미</h3>
-      <div class="guide-choices"><div><span class="guide-symbol" aria-hidden="true">∃</span><strong>이미 있는 식</strong><p>기록에 같은 결과를 내는 식이 있으면 선택하세요.</p></div><div><span class="guide-symbol" aria-hidden="true">+</span><strong>새로운 식</strong><p>기록에 같은 결과를 내는 식이 없으면 선택하세요.</p></div></div>
-      <p>화면 중앙의 식은 기록 속 두 식을 +, −, ×로 조합한 것입니다. 괄호 안부터 계산하세요.</p>
-    </section>
-    <section><h3>02 · 입력 표 읽기</h3>
-      <p>위쪽 표의 <strong>한 열이 한 번의 입력</strong>입니다. 각 열의 x, y, z 값을 넣어 계산하고, <strong>모든 열에서</strong> 결과가 같은 기존 식이 있는지 찾아보세요.</p>
-      <div class="guide-example"><span class="math">x = 1</span>만 있으면 <span class="math">x</span>와 <span class="math">x × x</span>는 모두 1.<br><span class="math">x = 2</span>인 열이 더해지면 결과가 2와 4로 달라집니다.</div>
-      <p>지금 공개된 입력을 기준으로 판단하세요. 모든 실수에서 성립하는 항등식을 찾는 규칙은 아닙니다.</p>
-    </section>
-    <section><h3>03 · 기록은 계속 자랍니다</h3>
-      <p>처음에는 변수만 있습니다. <strong>${CONSTANT_INTERVAL}라운드마다 무작위 상수</strong>가, <strong>${MAPPING_INTERVAL}라운드마다 새로운 입력 열</strong>이 추가됩니다. 추가 애니메이션이 끝나면 다음 문제의 시간이 시작됩니다.</p>
-      <p>새로운 식은 기록으로 들어가고, 동치인 식이 더 짧으면 대표를 교체합니다. 길이가 같으면 기존 대표를 유지합니다. 오답이어도 실제 판정에 따라 기록을 처리합니다. 버린 식은 입력이 늘어나도 되살아나지 않습니다.</p>
-    </section>
-    <section><h3>04 · 세 번의 기회</h3>
-      <p>한 문제에 <strong>${seconds}초</strong>. 오답이나 시간 초과로 목숨을 하나 잃고, 세 번 잃으면 게임이 끝납니다. 라운드 수에는 제한이 없습니다.</p>
-      <p>정답은 100점에 시간 보너스 최대 100점. 정답·오답 모두 <strong>2초</strong> 뒤 자동으로 넘어갑니다. ♫로 소리를 켜고 끌 수 있고, 일시정지나 가이드를 열면 시간도 멈춥니다.</p>
-    </section></div>`, `<div class="help-copy">
-    <p class="guide-intro">Calculate, then look through the archive.<br>Keep one representative for each set of matching outputs.</p>
-    <section><h3>01 · Two choices</h3>
-      <div class="guide-choices"><div><span class="guide-symbol" aria-hidden="true">∃</span><strong>Exists</strong><p>Choose this if an archived expression has the same outputs.</p></div><div><span class="guide-symbol" aria-hidden="true">+</span><strong>New</strong><p>Choose this if no archived expression has the same outputs.</p></div></div>
-      <p>Each candidate combines two archived expressions using +, − or ×. Evaluate parentheses first.</p>
-    </section>
-    <section><h3>02 · Read the inputs</h3>
-      <p><strong>Each column is one input tuple.</strong> Substitute its x, y and z values. An existing representative must match the candidate in <strong>every column</strong>.</p>
-      <div class="guide-example">With only <span class="math">x = 1</span>, both <span class="math">x</span> and <span class="math">x × x</span> produce 1.<br>Add <span class="math">x = 2</span>, and their outputs differ: 2 and 4.</div>
-      <p>Use the currently revealed inputs. Matching here does not mean equality for every real input.</p>
-    </section>
-    <section><h3>03 · A growing archive</h3>
-      <p>You start with variables only. A <strong>random constant arrives every ${CONSTANT_INTERVAL} completed rounds</strong>, and a <strong>new input column every ${MAPPING_INTERVAL}</strong>. The next timer starts after the arrival animation.</p>
-      <p>New expressions enter the archive. A shorter matching expression replaces its representative; ties keep the existing one. The archive follows the actual answer even if you are wrong. Discarded expressions are not restored when inputs grow.</p>
-    </section>
-    <section><h3>04 · Three chances</h3>
-      <p>You have <strong>${seconds} seconds</strong> per round. A wrong answer or timeout costs one life. Lose all three and the game ends. There is no round limit.</p>
-      <p>A correct answer earns 100 points plus up to 100 for time left. The game advances after <strong>2 seconds</strong>. Use ♫ to toggle sound. Pause or open this guide to stop the timer.</p>
-    </section></div>`);
-}
+import {ARRIVAL_SECONDS,MIN_ARRIVAL_SECONDS,ARRIVAL_STEP_SECONDS,INPUT_SECONDS,MIN_INPUT_SECONDS,INPUT_STEP_SECONDS,VALUE_BOUND,QUEUE_CAPACITY,RECORD_CAPACITY} from './queue-game.ts';
+export function guideMarkup(){return t(`<div class="help-copy">
+<section><h3>판정 기준</h3><p>표시된 x, y, z 값을 식에 넣어 계산합니다. <strong>지금 입력에서 결과가 같으면</strong> 같은 것으로 판정합니다. 모든 실수에서 성립하는 수학적 동치와는 다릅니다.</p><div class="guide-example">x = 1 → x와 x × x의 결과는 모두 1<br>x = 2 → 결과가 2와 4로 달라집니다.</div></section>
+<section><h3>목록을 누를까, +를 누를까</h3><p>결과가 같은 목록의 식을 누르면 <strong>후보와 누른 식이 둘 다 삭제</strong>됩니다. 같은 결과가 여러 개라면 어느 것을 눌러도 됩니다.</p><p>같은 결과가 없으면 <strong>+</strong>로 후보를 목록에 넣습니다. 목록 ${RECORD_CAPACITY}칸이 꽉 차면 추가하지 못하고 큐로 돌려보냅니다. 삭제된 칸은 비워두고, 새 식이 그 자리를 채웁니다.</p><p>다른 결과의 식을 누르거나, 같은 결과가 있는데 +를 누르면 오답입니다. 목록은 그대로 두고 후보만 큐로 돌려보냅니다.</p></section>
+<section><h3>두 개의 타이머</h3><p>큐 오른쪽 세로 바는 새 후보가 들어올 때까지의 시간입니다. ${ARRIVAL_SECONDS}초로 시작해 유입마다 ${ARRIVAL_STEP_SECONDS}초씩 줄고, 최소 ${MIN_ARRIVAL_SECONDS}초가 됩니다. <strong>대기 큐 ${QUEUE_CAPACITY}칸이 차면 종료</strong>됩니다. 중앙 후보는 대기 칸에 포함되지 않습니다.</p><p>기다리던 식부터 꺼냅니다. 큐가 비었으면 새 후보를 바로 만들고 유입 타이머를 초기화합니다. 답변 후 대기 중에도 두 타이머는 흐릅니다.</p><p>입력 위 가로 바는 ${INPUT_SECONDS}초로 시작해 교체마다 ${INPUT_STEP_SECONDS}초씩 줄고, 최소 ${MIN_INPUT_SECONDS}초가 됩니다. 그때 모든 변수 값을 −${VALUE_BOUND}~${VALUE_BOUND} 정수에서 다시 뽑습니다. 바뀐 숫자만 강조하며, 목록의 식을 자동으로 합치거나 지우지는 않습니다. 새 입력은 진행 중인 후보의 판정에도 바로 적용됩니다.</p></section>
+<section><h3>점수와 설정</h3><p>연속 정답 n회째 점수는 <strong>100 × 1.01ⁿ을 반올림</strong>한 값입니다. 정답 후 0.9초, 오답 후 2.5초 뒤 다음 후보로 넘어갑니다. 오답이면 연속 횟수는 0이 됩니다.</p><p>메인에서 변수 1~3개를 고릅니다. 최고 점수는 변수 개수별로 이 브라우저에 저장됩니다. Ⅱ나 도움말을 열거나 탭을 숨기면 타이머가 멈춥니다. ♫로 효과음을 켜고 끌 수 있습니다.</p><p>식은 변수·목록·대기 큐에서 두 재료를 골라 +, −, ×로 만듭니다. 생성 시 20% 확률로 −${VALUE_BOUND}~${VALUE_BOUND} 상수 하나도 재료에 섞습니다.</p></section></div>`,
+`<div class="help-copy">
+<section><h3>What counts as a match</h3><p>Evaluate expressions with the displayed x, y and z values. They match when they produce <strong>the same result for the current input</strong>. This does not require mathematical equivalence for every real input.</p><div class="guide-example">x = 1 → x and x × x both produce 1<br>x = 2 → they produce 2 and 4.</div></section>
+<section><h3>A listed expression, or +</h3><p>Tap a listed expression with the same result. <strong>Both the candidate and the selected expression disappear.</strong> If several expressions match, any of them is valid.</p><p>If none matches, <strong>+</strong> adds the candidate to the list. When all ${RECORD_CAPACITY} slots are occupied, + returns it to the queue. Removing a card leaves its slot empty; new expressions fill those gaps.</p><p>A different result, or + when a match exists, is a mistake. The list stays unchanged and the candidate returns to the queue.</p></section>
+<section><h3>The two timers</h3><p>The vertical bar beside the queue counts down to a fresh candidate. It starts at ${ARRIVAL_SECONDS} seconds and drops by ${ARRIVAL_STEP_SECONDS} seconds per arrival, down to ${MIN_ARRIVAL_SECONDS}. <strong>Filling all ${QUEUE_CAPACITY} waiting slots ends the game.</strong> The central candidate does not occupy a waiting slot.</p><p>The oldest waiting expression is drawn first. If the queue is empty, a new candidate appears immediately and the arrival timer resets. Both timers keep running during feedback.</p><p>The horizontal input timer starts at ${INPUT_SECONDS} seconds and drops by ${INPUT_STEP_SECONDS} seconds per reroll, down to ${MIN_INPUT_SECONDS}. All variable values are rerolled as integers from −${VALUE_BOUND} to ${VALUE_BOUND}. Only changed numbers are highlighted. Listed expressions are never merged or removed automatically. The new input immediately changes how the active candidate is judged.</p></section>
+<section><h3>Score and settings</h3><p>The nth consecutive correct answer earns <strong>100 × 1.01ⁿ, rounded</strong>. The next candidate follows after 0.9 seconds for a correct answer, or 2.5 seconds for a mistake. A mistake resets the streak to zero.</p><p>Choose 1–3 variables on the home screen. Best scores are saved in this browser separately for each variable count. Ⅱ, help, and hiding the tab pause the timers. ♫ toggles sound.</p><p>Expressions combine two ingredients from the variables, list and waiting queue using +, − or ×. Each generation has a 20% chance of adding one constant from −${VALUE_BOUND} to ${VALUE_BOUND} to the ingredient pool.</p></section></div>`);}
