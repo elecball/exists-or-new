@@ -302,34 +302,14 @@ sup { font-size: .6em; line-height: 0; vertical-align: super; }
 .setting-hint { font-size: 10px; line-height: 1.7; color: #7c8a6c; text-align: left; margin: 10px 0 20px; }
 .text-button { background: transparent; color: #617358; font-size: 12px; padding: 10px 3px; border-radius: 4px; }
 .text-button:hover { color: var(--green); text-decoration: underline; text-underline-offset: 4px; }
-.tutorial { max-width: 720px; margin-top: 20px; }
-.tutorial-top { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #7c8a6c; margin-bottom: 22px; }
-.tutorial h1 { font-size: clamp(23px, 5vw, 31px); letter-spacing: -1px; margin: 0 0 13px; }
-.tutorial h1:focus { outline: none; }
-.tutorial-prompt { font-size: 13px; line-height: 1.9; color: #617358; min-height: 48px; margin-bottom: 24px; }
-.tutorial-puzzle { max-width: 480px; margin: 0 auto; }
-.tutorial-expression { display: flex; align-items: center; justify-content: center; gap: 12px; font-size: clamp(34px, 7vw, 48px); min-height: 125px; }
-.tutorial .answer-button { display: flex; flex-direction: column; gap: 10px; padding: 18px 8px; }
-.tutorial .answer-button small { font-size: 11px; font-weight: 400; }
-.tutorial-response { max-width: 480px; margin: 20px auto 0; text-align: center; }
-.tutorial-response p { font-size: 12px; color: #617358; line-height: 1.9; min-height: 46px; }
-.tutorial-response .primary { width: 100%; margin-top: 20px; }
 @media(max-width:600px) {
   .home { margin-top: 3vh; }
   .custom-settings { gap: 10px; }
-  .tutorial { margin-top: 8px; }
 }
 
 .home h1 { font-size: clamp(32px, 7vw, 43px); }
 .absorption-flight { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .absorption-flight .operand { min-width: 0; }
-.tutorial-puzzle-host { position: relative; }
-.tutorial-puzzle.preparing { opacity: 0; pointer-events: none; }
-.tutorial-progress { display: grid; grid-template-columns: repeat(4, 1fr); list-style: none; padding: 0; margin: 0 0 26px; gap: 8px; }
-.tutorial-progress li { border-top: 2px solid var(--line); padding-top: 8px; color: #89977a; font-size: 10px; }
-.tutorial-progress .reached { border-color: #799363; }
-.tutorial-progress [aria-current] { color: var(--green); }
-.tutorial-response .primary:disabled { opacity: .5; cursor: default; }
 .lesson-comparison { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 22px; }
 .lesson-comparison caption { text-align: left; color: #7c8a6c; font-size: 10px; margin-bottom: 12px; }
 .lesson-comparison th, .lesson-comparison td { padding: 10px; border-bottom: 1px solid var(--line); font-weight: 400; }
@@ -405,3 +385,235 @@ sup { font-size: .6em; line-height: 0; vertical-align: super; }
   .header-controls { gap: 5px; }
   .language-button { min-width: 34px; font-size: 10px; }
 }
+
+/* Renewal: one mode, five queue slots and a consumable combo exemption. */
+.queue-counter { font-size: 13px; white-space: nowrap; color: #768960; }
+.queue-warning { color: #b65f14; }
+.queue-critical { color: #b33d36; }
+.interaction-hint { margin: 2px 0 10px; color: #617358; font-size: 11px; line-height: 1.5; }
+button.record { color: var(--green); text-align: center; justify-content: center; transition: border-color .15s, background .15s; }
+button.record:not(:disabled):hover { border-color: #7d936c; background: #edf2e5; }
+button.record.selected-correct { color: #fff; background: #377349; border-color: #377349; }
+button.record.selected-wrong { color: #fff; background: #bb5146; border-color: #bb5146; }
+button.record:disabled { cursor: default; opacity: 1; }
+.playfield { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 28px; align-items: center; margin-top: 18px; }
+.playfield .puzzle { padding-top: 0; }
+.playfield .candidate { min-height: 135px; margin-bottom: 26px; }
+.queue-actions { display: flex; justify-content: center; }
+.queue-actions .answer-button { width: min(100%, 340px); min-height: 66px; padding: 12px 20px; font-size: 14px; gap: 14px; }
+.queue-actions .choice-math { font-size: 36px; }
+.danger-queue { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; color: #7d8c71; background: #f2f2e9; }
+.danger-heading { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 12px; font-size: 11px; }
+.danger-heading h2 { margin: 0; font-size: 12px; font-weight: 500; }
+.danger-slots { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
+.danger-slot { min-width: 0; min-height: 43px; display: flex; justify-content: center; align-items: center; border: 1px dashed #cfd5c6; border-radius: 5px; padding: 5px; }
+.danger-slot .record-expression { font-size: 16px; max-width: 100%; }
+.danger-slot.occupied { background: #f4e9df; border-style: solid; border-color: #d9b6a7; color: #9c5846; }
+.danger-queue p { margin: 12px 0 0; font-size: 10px; text-align: center; }
+.danger-queue.queue-warning { border-color: #d1aa7d; }
+.danger-queue.queue-critical { border-color: #c77969; color: #b33d36; }
+.queue-hit { animation: life-impact 440ms ease-out both; }
+.took-damage .candidate, .took-damage .candidate .operator { color: #b34e42; }
+.result-reason { color: #7d8c71; font-size: 12px; line-height: 1.8; }
+.result-actions { flex-wrap: wrap; }
+@media(max-width:600px) {
+  .game { padding-inline: 20px; margin-top: 2px; }
+  .status { gap: 9px; flex-wrap: wrap; }
+  .queue-counter { font-size: 11px; }
+  .score-item { gap: 4px; }
+  .archive { position: static; padding-top: 0; }
+  .archive-heading { margin-bottom: 2px; }
+  .playfield { display: grid; grid-template-columns: minmax(0,1fr) 86px; align-items: center; gap: 12px; margin-top: 14px; }
+  .danger-queue { padding: 8px 6px; }
+  .danger-heading { margin-bottom: 7px; gap: 4px; font-size: 10px; }
+  .danger-slots { grid-template-columns: minmax(0,1fr); gap: 5px; }
+  .danger-slot { min-height: 38px; }
+  .danger-slot .record-expression { font-size: 14px; }
+  .danger-queue p { display: none; }
+  .playfield .candidate { min-height: 100px; margin-bottom: 18px; }
+  .playfield .answer-area .feedback { top: -28px; }
+  .playfield .answer-area .feedback.incorrect { top: -35px; }
+  .playfield .damage-emoji { font-size: 25px; }
+  .time-track { margin-bottom: 14px; }
+  .input-table-wrap { margin-top: 10px; }
+  .queue-actions .answer-button { min-height: 58px; }
+}
+@media(prefers-reduced-motion:reduce) { .queue-hit { animation:none; } button.record { transition:none; } }
+
+.danger-slot.stack-correct { background:#edf1e5; border-color:#bac9a8; color:#4f6d3b; }
+.combo-ready, .combo-feedback { color:#6c9046; }
+.combo-feedback { font-size:10px; }
+
+/* renewal_plan.md: a fixed 3 × 3 selectable expression list and a real pending queue. */
+.records { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); max-height:none; overflow:visible; scrollbar-gutter:auto; }
+.record { width:100%; max-width:100%; height:58px; min-height:58px; padding:8px; }
+.empty-record { justify-content:center; border-style:dashed; background:transparent; color:#c6cebc; }
+.record-clearing { animation:clear-pair 240ms ease-out forwards; }
+.queue-arrival { animation:addition-chip 500ms ease-out both; }
+.danger-slot.occupied { background:#edf0e6; border-color:#bdc9ae; color:#4f6d3b; position:relative; }
+.danger-slot[data-next] { border-width:2px; border-color:#83996d; }
+.danger-slot[data-next]::after { content:'↓'; position:absolute; right:3px; bottom:0; font-size:10px; color:#83996d; }
+@keyframes clear-pair { to {opacity:0;transform:scale(.65);} }
+@media(max-width:600px) {
+  .records { max-height:none; gap:6px; }
+  .record { height:48px; min-height:48px; padding:6px; }
+  .record-expression { font-size:20px; }
+  .playfield .candidate { min-height:120px; }
+  .playfield .answer-area .feedback { max-width:100%; white-space:normal; }
+  .playfield .feedback-title { gap:6px; flex-wrap:wrap; }
+}
+@media(prefers-reduced-motion:reduce) { .record-clearing,.queue-arrival {animation:none;} }
+
+.danger-slot.queue-return {background:#f4e5df;border-color:#c78270;color:#a64f40;}
+
+/* Inputs and queue share the same top edge. Candidate stays below the inputs. */
+.playfield { grid-template-areas:"inputs queue" "puzzle queue"; row-gap:12px; align-items:start; }
+.playfield > .input-table-wrap { grid-area:inputs; margin-top:0; min-width:0; max-width:100%; }
+.playfield > .puzzle-host { grid-area:puzzle; min-width:0; }
+.playfield > .danger-queue { grid-area:queue; align-self:start; }
+.playfield .puzzle { padding-top:0; }
+.queue-hidden { visibility:hidden !important; }
+.queue-flight { display:grid; place-items:center; box-sizing:border-box; background:transparent; padding:5px; margin:0; will-change:transform,opacity; }
+.is-drawing .candidate { visibility:hidden; }
+.archive { padding-top:0; }
+@media(max-width:600px) { .playfield { grid-template-areas:"inputs queue" "puzzle queue"; row-gap:8px; } }
+
+.waiting-puzzle{min-height:240px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--muted);font-size:14px;text-align:center}.waiting-puzzle span{font-size:32px;letter-spacing:8px}
+.time-value>small:first-child{font-size:10px;letter-spacing:0;white-space:nowrap}
+
+/* The arrival timer runs vertically beside the five queue slots. */
+.playfield > .danger-queue{display:grid;grid-template-columns:minmax(0,1fr) 4px;column-gap:9px;row-gap:8px}
+.danger-heading{grid-column:1 / -1;margin-bottom:0}
+.danger-slots{grid-column:1;grid-row:2}
+.queue-timer.time-track{grid-column:2;grid-row:2;align-self:stretch;width:4px;height:auto;margin:0;overflow:hidden;border-radius:3px;background:#dce2d2}
+.queue-timer #time-bar{width:100%;height:100%;transform-origin:center bottom;transition:none}
+.queue-time{grid-column:1 / -1;justify-self:end;margin:0;font-size:12px;line-height:1.2}
+.queue-time small{margin-left:3px;font-size:9px}
+.status .pause-button{margin-left:auto}
+@media(max-width:600px){.playfield > .danger-queue{column-gap:5px;grid-template-columns:minmax(0,1fr) 3px}.queue-timer.time-track{width:3px}.queue-time{font-size:11px}}
+
+.playfield > .danger-queue{row-gap:0}
+.danger-queue .danger-slots,.danger-queue .queue-timer.time-track{grid-row:1}
+
+.input-timer{height:3px;width:100%;margin-top:10px;border-radius:3px;overflow:hidden;background:#dce2d2}
+#input-time-bar{height:100%;width:100%;background:#8b9dba;transform-origin:left center}
+
+.input-enter{animation:input-enter 250ms ease-out both}
+@keyframes input-enter{from{opacity:.3;background:#dce6ee}to{opacity:1;background:transparent}}
+@media(prefers-reduced-motion:reduce){.input-enter{animation:none}}
+
+.is-ending .answer-area{pointer-events:none;animation:ending-controls 250ms ease-out both}
+.is-ending .record{pointer-events:none}
+.is-ending .danger-queue{border-color:#b56c60}
+@keyframes ending-controls{to{opacity:0;transform:translateY(5px)}}
+@media(prefers-reduced-motion:reduce){.is-ending .answer-area{animation:none;opacity:0}}
+
+.variable-settings.custom-settings{display:block;width:min(100%,320px);margin:0 auto 24px;text-align:left}
+.variable-settings .slider-bounds{font-size:11px}
+
+/* Game over sits above the frozen board instead of replacing it. */
+.game-over{width:min(480px,calc(100% - 32px));max-height:calc(100dvh - 40px);padding:24px;border:0;background:transparent;color:#f6f5ec;overflow:auto;animation:game-over-in 200ms ease-out both}
+.game-over::backdrop{background:rgb(0 0 0 / 82%);animation:game-over-backdrop 200ms ease-out both}
+.game-over .results{margin:0;padding:0;max-width:none}
+.result-heading{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.game-over .results h1{margin:0;color:#f6f5ec;font-size:28px}
+.game-over .final-score{font-size:clamp(48px,12vw,78px);color:#fff;overflow-wrap:anywhere}
+.game-over .final-score small,.game-over .result-stats{color:#c5c8bd}
+.game-over .final-score>span{color:#d5e9ad}
+.game-over .primary{background:#e9efdc;color:#213a28;border-color:#e9efdc}
+.game-over .secondary,.game-over .language-button{background:transparent;color:#e9efdc;border-color:#82867b}
+.game-over button:focus-visible{outline:3px solid #d6efad;outline-offset:4px}
+body:has(.game-over[open]){overflow:hidden}
+@keyframes game-over-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes game-over-backdrop{from{background:rgb(0 0 0 / 0%)}to{background:rgb(0 0 0 / 82%)}}
+@media(prefers-reduced-motion:reduce){.game-over,.game-over::backdrop{animation:none}}
+
+.playfield>.input-table-wrap{overflow:visible}
+.input-table-wrap>.input-timer{margin:0 0 12px}
+.input-values{width:100%;table-layout:fixed;border-collapse:collapse}
+.input-pair{padding:6px 8px;text-align:center;font-size:24px;line-height:1.5}
+.input-pair+.input-pair{border-left:1px solid #c5d0ba}
+.input-field{display:inline-flex;align-items:baseline;justify-content:center;gap:6px;white-space:nowrap}
+.input-equals{color:#87967c;font-size:.8em}
+.input-variable{color:#4f6d3b}.input-value{display:inline-block;min-width:1.2em;text-align:center;color:#718363;border-radius:4px}
+@media(max-width:600px){.input-pair{padding:4px;font-size:20px}.input-field{gap:3px}}
+
+/* Guided practice uses the live board; only this instruction panel is added. */
+body.tutorial-playing{overflow:hidden}
+.tutorial-playing #tutorial-host{display:block}
+.tutorial-board.tutorial-resolved:not(.tutorial-full) #question-title{opacity:0}
+.tutorial-coach{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);width:min(840px,calc(100% - 24px));z-index:20;display:grid;grid-template-columns:36px minmax(0,1fr) 36px;align-items:center;gap:12px;padding:12px 14px;border:1px solid #c5d2b9;border-radius:10px;background:#fbfcf5;box-shadow:0 6px 24px #203d3012}
+.coach-step{font-size:13px;font-weight:600;color:#587448;line-height:1.4}
+.tutorial-coach .tutorial-prompt{font-size:17px;line-height:1.45;min-height:0;margin:5px 0 0;color:#4d6243}
+.coach-center{text-align:center;min-width:0}
+.coach-arrow{display:grid;place-items:center;width:36px;height:44px;padding:0;border:1px solid #c5d2b9;border-radius:7px;background:transparent;color:#365c32;font-size:25px;line-height:1}
+.coach-arrow:not(:disabled):hover{background:#eaf1e1}
+.coach-arrow:disabled{opacity:.28;cursor:default}
+.coach-center .coach-action{min-height:32px;margin:8px auto 0;padding:5px 14px;font-size:12px;display:inline-flex;justify-content:center}
+.coach-center .coach-action:disabled{opacity:.5;cursor:default}
+.tutorial-playing .tutorial-target{position:relative;isolation:isolate;outline:none}
+.tutorial-playing .tutorial-target>*{position:relative;z-index:1}
+.tutorial-playing .tutorial-target::after{content:"";position:absolute;inset:1px;z-index:0;border-radius:inherit;pointer-events:none;background:radial-gradient(ellipse at center,#b4c1aa,#c5cebf 85%);opacity:.19;animation:tutorial-fill-glow 1.6s ease-in-out infinite}
+.tutorial-target:focus-visible{outline:2px solid #315640;outline-offset:2px}
+@keyframes tutorial-fill-glow{0%,15%,100%{opacity:.19}55%{opacity:.57}}
+@keyframes tutorial-fill-reduced{0%,15%{opacity:.19}100%{opacity:.41}}
+@media(prefers-reduced-motion:reduce){.tutorial-playing .tutorial-target::after{animation-name:tutorial-fill-reduced;animation-duration:1.5s;animation-iteration-count:1;animation-fill-mode:forwards}}
+@media(max-width:420px){.tutorial-coach{grid-template-columns:30px minmax(0,1fr) 30px;gap:8px;padding:10px}.coach-arrow{width:30px;height:40px;font-size:23px}.tutorial-coach .tutorial-prompt{font-size:15px;line-height:1.4}}
+@media(max-height:650px){
+ .site-header{padding:10px 20px}
+ .game{margin-top:0;margin-bottom:16px;padding-inline:20px}
+ .status{min-height:32px}
+ .archive{padding-bottom:5px}
+ .records{gap:5px;padding:2px 0 5px}
+ .record{height:36px;min-height:36px;padding:4px}
+ .record-expression{font-size:18px}
+ .playfield{margin-top:8px;column-gap:12px;row-gap:6px;grid-template-columns:minmax(0,1fr) 76px}
+ .input-table-wrap>.input-timer{margin-bottom:6px}
+ .input-pair{font-size:18px;padding:2px}
+ .danger-queue{padding:6px 5px}
+ .danger-slots{gap:4px}
+ .danger-slot{min-height:26px;padding:2px}
+ .danger-slot .record-expression{font-size:12px}
+ .playfield .candidate{min-height:74px;margin-bottom:12px}
+ .operand{padding:8px 2px}
+ .queue-actions .answer-button{min-height:44px;padding:8px 12px;font-size:14px}
+ .queue-actions .choice-math{font-size:30px}
+ .feedback{padding:8px 12px}
+ .feedback-title{font-size:12px}
+}
+@media(max-height:480px) and (min-width:500px){
+ .site-header{padding-block:6px}
+ .game{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;gap:6px 20px}
+ .status{grid-column:1 / -1;min-height:28px}
+ .archive{grid-row:2;grid-column:1;padding:0;min-height:0;align-self:stretch}
+ .records{height:100%;grid-template-rows:repeat(3,minmax(0,1fr));padding:2px 0;gap:4px}
+ .record{height:100%;min-height:0;padding:2px}
+ .record-expression{font-size:16px}
+ .playfield{grid-row:2;grid-column:2;margin:0;grid-template-columns:minmax(0,1fr) 60px;gap:4px 10px}
+ .danger-slot{min-height:20px}
+ .danger-queue{padding:4px}
+ .danger-slot .record-expression{font-size:10px}
+ .playfield .candidate{min-height:45px;margin-bottom:5px}
+ .operand{padding:4px 2px}
+ .queue-actions .answer-button{min-height:32px;padding:4px 10px;font-size:12px}
+ .queue-actions .choice-math{font-size:24px}
+ .tutorial-coach{bottom:8px;padding:8px 12px}
+}
+
+.tutorial-board.tutorial-full .queue-actions{opacity:0;pointer-events:none;transition:opacity .2s}
+
+.tutorial-timer-pointers{position:fixed;inset:0;width:100%;height:100%;z-index:10;pointer-events:none;overflow:hidden;color:#668159}
+.tutorial-timer-pointers path{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tutorial-timer-pointers circle{fill:#f6f5ef;stroke:currentColor;stroke-width:1}
+.tutorial-timer-pointers text{font:10px system-ui,sans-serif;fill:currentColor}
+
+.feedback-still .damage-emoji{animation:none}
+.tutorial-board .damage-emoji{animation-duration:400ms}
+
+.tutorial-game-over{position:fixed;inset:0;z-index:17;display:grid;place-items:center;background:rgb(0 0 0 / 82%);color:#f6f5ec;font-size:clamp(28px,6vw,48px);font-weight:700;pointer-events:none;animation:game-over-in 200ms ease-out both}
+
+.danger-slot .record-expression{overflow:visible;flex-shrink:0;white-space:nowrap}
+.modal-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.modal-heading h2{margin:0}
+.tutorial-playing:has(.tutorial-game-over) .site-header{position:relative;z-index:18}
+.tutorial-playing:has(.tutorial-game-over) .site-header .language-button{color:#e9efdc;border-color:#82867b}

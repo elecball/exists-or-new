@@ -1,86 +1,186 @@
 import {t} from './i18n.ts';
-import { createSession, inputMapping, makeQuestion, outputsFor, submitAnswer } from './game.ts';
-import { binary, formatComposition, normalize, symbol, variable, type Expr } from './math.ts';
-import { renderMath } from './math-markup.ts';
-import { AdditionTransition } from './addition-transition.ts';
-import { playFeedback, unlockSound } from './sound.ts';
-
-/** Fixed, reproducible lessons scored by the same engine as ordinary play. */
-export function tutorialLesson(index: number) {
-  if (!Number.isInteger(index) || index < 0 || index > 3) throw new Error(t("잘못된 튜토리얼 단계입니다.", "Invalid tutorial step."));
-  const x = variable('x'), twice = binary('+', x, x), square = binary('*', x, x);
-  const s = createSession('easy', () => .75);
-  const expressions: Expr[] = index === 0 ? [x] : index === 3 ? [x, twice, square] : [x, twice];
-  s.records = expressions.map((expr, i) => ({id:i + 1, expr, polynomial:normalize(expr)}));
-  s.mappings = index < 2 ? [inputMapping(1, 0, 0)] : [inputMapping(1, 0, 0), inputMapping(2, 0, 0)];
-  const q = index === 0 ? makeQuestion(s, s.records[0], s.records[0], '+')
-    : index === 3 ? makeQuestion(s, s.records[1], s.records[0], '-')
-    : makeQuestion(s, s.records[0], s.records[0], '*');
-  const copy = [
-    {title:t("하나에서 시작하기", "Start with one"), prompt:t("표의 값 x = 1을 넣어 계산해 보세요. 이 결과를 내는 식이 기록에 있나요?", "Substitute x = 1 from the table. Does an archived expression produce this result?"), explanation:t("x + x는 2, 기록의 x는 1입니다. +를 누르면 새로운 대표 x + x가 기록에 들어갑니다.", "x + x produces 2; the archived x produces 1. Choose + to add x + x as a new representative.")},
-    {title:t("모양은 달라도", "Different forms"), prompt:t("기록에 x + x가 추가됐습니다. 이번 식의 결과는 어떤 기록과 같은가요?", "x + x is now archived. Which archived expression matches this candidate?"), explanation:t("x × x는 1입니다. 기록의 x도 1이므로 ∃. 모양이 달라도 모든 입력 열에서 결과가 같으면 더 짧은 대표 하나만 남깁니다. 길이가 같으면 기존 대표를 유지합니다.", "x × x produces 1, just like x: choose ∃. Different forms share one representative when their outputs match in every input column. Keep the shorter one; ties keep the existing one.")},
-    {title:t("관찰이 늘어나면", "One more observation"), prompt:t("x = 2인 열이 추가됐습니다. 두 열을 모두 확인하고, 방금 본 식을 다시 판단해 보세요.", "A new column, x = 2, arrives. Check both columns and judge the same expression again."), explanation:t("x × x의 결과는 [1, 4]. x는 [1, 2], x + x는 [2, 4]입니다. 모든 열에서 같은 대표가 없으므로 이번에는 +입니다. 버린 식은 자동 복원되지 않고, 다시 등장했을 때 새로 판단합니다.", "x × x produces [1, 4]. x gives [1, 2], and x + x gives [2, 4]. No representative matches every column, so choose + this time. Discarded expressions are not restored automatically; they are judged again when generated.")},
-    {title:t("대표 하나만 남기기", "Keep one representative"), prompt:t("기록 속 x + x와 x를 뽑았습니다. 괄호 안부터 계산해서 모든 입력 열을 비교해 보세요.", "The operands are the archived x + x and x. Evaluate parentheses first, then compare every input column."), explanation:t("(x + x) − x의 결과는 [1, 2]로 x와 같습니다. ∃를 누르면 기존 대표 x를 유지합니다. 이제 직접 플레이해 보세요!", "(x + x) − x produces [1, 2], just like x. Choose ∃ to keep the existing representative. You are ready to play!")},
-  ][index];
-  return {s, q, ...copy};
+import {inputMapping} from './game.ts';
+import {binary,normalize,variable,type Expr} from './math.ts';
+import {renderMath} from './math-markup.ts';
+import {playFeedback,unlockSound} from './sound.ts';
+import {AdditionTransition} from './addition-transition.ts';
+import {QueueMotion,captureQueueCard,type QueueSnapshot} from './queue-motion.ts';
+import {gameBoardMarkup,localizeGameBoard} from './game-board.ts';
+import {fitCandidate,fitQueueExpressions} from './fit-candidate.ts';
+import {TutorialTimerPointers} from './tutorial-timer-pointers.ts';
+import {createQueueSession,generateQueueQuestion,submitQueueAnswer,advanceQueueTime,updateQueueInput,enqueueCandidate,INPUT_SECONDS,MIN_INPUT_SECONDS,type Selection,type QueueAnswer} from './queue-game.ts';
+const inputEquality=(value:number)=>`<math class="formula" aria-label="x = ${value}"><mi mathvariant="italic">x</mi><mo>=</mo><mn>${value}</mn></math>`;
+const plusMath='<math class="formula" aria-label="+"><mo>+</mo></math>';
+export const TUTORIAL_STEPS=6;
+export const TUTORIAL_PROGRESS_KEY='exists-tutorial-progress-v1';
+function loadProgress():Set<number>{
+  try{
+    const value=JSON.parse(window.localStorage.getItem(TUTORIAL_PROGRESS_KEY)??'[]');
+    return new Set(Array.isArray(value)?value.filter((step:unknown)=>typeof step==='number'&&Number.isInteger(step)&&step>=0&&step<TUTORIAL_STEPS):[]);
+  }catch{return new Set();}
 }
-
-export interface TutorialControls { pause(): void; resume(): void; cancel(): void }
-export function mountTutorial(host: HTMLElement, onExit: () => void, onPlay: () => void): TutorialControls {
-  const transition = new AdditionTransition();
-  let step = 0, lesson = tutorialLesson(0), correct = false, selected: boolean | null = null;
-  let animating = false, disposed = false;
-  const finishAnimation = () => {
-    if (disposed) return;
-    animating = false;
-    const next = host.querySelector<HTMLButtonElement>('#tutorial-next');
-    if (next) { next.disabled = false; if (!document.hidden) next.focus(); }
-    const puzzle = host.querySelector<HTMLElement>('.tutorial-puzzle');
-    if (puzzle) { puzzle.inert = false; puzzle.removeAttribute('aria-hidden'); }
-  };
-  const render = () => {
-    if (disposed) return;
-    const {s, q} = lesson;
-    const arrival = correct && animating && q.matchId === null ? s.records.at(-1)!.id : null;
-    const inputArrival = !correct && animating && step === 2;
-    host.innerHTML = `<main class="tutorial game"><div class="tutorial-top"><span>${t('튜토리얼', 'Tutorial')} · ${step + 1} / 4</span><div class="tutorial-nav"><button class="text-button" id="tutorial-exit">${t('설정', 'Settings')}</button><button class="text-button" id="tutorial-skip">${t('바로 플레이', 'Skip to play')} ↗</button></div></div>
-      <ol class="tutorial-progress" aria-label="${t("학습 진행", "Tutorial progress")}">${[t("발견", "Discover"), t("대표", "Represent"), t("관찰", "Observe"), t("축약", "Reduce")].map((label, i) => `<li ${i === step ? 'aria-current="step"' : ''} class="${i <= step ? 'reached' : ''}"><span>${label}</span></li>`).join('')}</ol>
-      <h1 tabindex="-1" id="lesson-title">${lesson.title}</h1><p class="tutorial-prompt">${lesson.prompt}</p>
-      <section class="archive" aria-label="${t("보관한 대표 식", "Archived representatives")}"><div class="archive-heading"><h2>${t('기록', 'Archive')} <span>${s.records.length}</span></h2></div><div class="records">${s.records.map(r => `<div id="tutorial-record-${r.id}" class="record ${arrival === r.id ? 'arrival-target' : ''} ${correct && r.id === q.matchId ? 'matched' : ''}"><span class="math record-expression">${renderMath(r.expr)}</span></div>`).join('')}</div></section>
-      <section class="input-table-wrap math"><table class="input-table" aria-label="${t("각 열이 하나의 입력", "Each column is one input")}"><tbody><tr><th scope="row">${renderMath(variable('x'))}</th>${q.mappings.map((m, i) => `<td ${i === 1 && inputArrival ? 'id="tutorial-new-input" class="arrival-target"' : ''}>${m.x.toString()}</td>`).join('')}</tr></tbody></table></section>
-      <div class="tutorial-puzzle-host"><section class="tutorial-puzzle ${inputArrival ? 'preparing' : ''}" ${inputArrival ? 'inert aria-hidden="true"' : ''}><div class="tutorial-expression math" role="math" aria-label="${formatComposition(q.expr)}">${renderMath(q.left.expr, true)}<span aria-hidden="true">${symbol(q.op)}</span>${renderMath(q.right.expr, true)}</div><div class="answer-buttons">
-        ${[true, false].map(choice => `<button class="answer-button ${selected === choice ? correct ? 'selected-correct' : 'selected-wrong' : ''}" data-choice="${choice}" ${correct ? 'disabled' : ''} aria-label="${choice ? t("이미 있는 식", "Exists") : t("새로운 식", "New")}"><span class="choice-math" aria-hidden="true">${choice ? '∃' : '+'}</span><small>${choice ? t("이미 있는 식", "Exists") : t("새로운 식", "New")}</small></button>`).join('')}
-      </div></section></div><div class="tutorial-response" aria-live="polite">${correct ? `<p>✓ ${lesson.explanation}</p>${step === 2 ? `<table class="lesson-comparison"><caption>${t('같은 열끼리 비교해 보세요', 'Compare within each column')}</caption><thead><tr><th scope="col">${t('식', 'Expression')}</th>${q.mappings.map(m => `<th scope="col">x = ${m.x.toString()}</th>`).join('')}</tr></thead><tbody>${s.records.map(r => `<tr><th scope="row" class="math">${renderMath(r.expr)}</th>${outputsFor(r.expr, q.mappings).map(output => `<td>${output.toString()}</td>`).join('')}</tr>`).join('')}</tbody></table>` : ''}<button class="primary" id="tutorial-next" ${animating ? 'disabled' : ''}>${step === 3 ? t("플레이", "Play") : t("다음", "Next")} <span aria-hidden="true">→</span></button>${step === 3 ? `<button class="text-button" id="tutorial-settings">${t('설정으로 돌아가기', 'Back to settings')}</button>` : ''}` : `<p>${selected === null ? t("시간과 목숨 제한 없이 연습합니다.", "Practice without time or life limits.") : t("한 번 더! 각 열의 결과를 기록 속 식과 비교해 보세요.", "Try again. Compare the result in each column with the archived expressions.")}</p>`}</div></main>`;
-    host.querySelector('#tutorial-exit')!.addEventListener('click', onExit);
-    host.querySelector('#tutorial-skip')!.addEventListener('click', onPlay);
-    host.querySelectorAll<HTMLButtonElement>('[data-choice]').forEach(button => button.addEventListener('click', () => {
-      if (correct || animating || disposed) return;
-      unlockSound(); selected = button.dataset.choice === 'true'; correct = selected === (q.matchId !== null);
-      if (correct) { submitAnswer(s, q, selected, 0); animating = true; }
-      playFeedback(correct, false); render();
-      if (correct) {
-        const source = host.querySelector<HTMLElement>('.tutorial-expression')!;
-        const card = host.querySelector<HTMLElement>(`#tutorial-record-${q.matchId ?? s.records.at(-1)!.id}`)!;
-        card.scrollIntoView({block:'nearest', inline:'nearest'});
-        if (q.matchId !== null) void transition.absorb(source, card, finishAnimation);
-        else void transition.store(source, {parts:[card.querySelector<HTMLElement>('.record-expression')!], reveal:[card], frame:card}, finishAnimation);
-      } else host.querySelector<HTMLElement>(`[data-choice="${selected}"]`)?.focus();
-    }));
-    host.querySelector('#tutorial-next')?.addEventListener('click', () => {
-      if (animating || disposed) return;
-      if (step === 3) { onPlay(); return; }
-      transition.cancel(); lesson = tutorialLesson(++step); correct = false; selected = null;
-      animating = step === 2; render();
-      host.querySelector<HTMLElement>('#lesson-title')?.focus();
-      if (animating) {
-        const stage = host.querySelector<HTMLElement>('.tutorial-puzzle-host')!;
-        const puzzle = stage.querySelector<HTMLElement>('.tutorial-puzzle')!;
-        const cell = host.querySelector<HTMLElement>('#tutorial-new-input')!;
-        void transition.run(stage, null, puzzle, [{parts:[cell], reveal:[cell]}], finishAnimation);
-      }
+export function tutorialLesson(index:number){
+  if(!Number.isInteger(index)||index<0||index>=TUTORIAL_STEPS)throw Error('Invalid tutorial step');
+  const x=variable('x'),twice=binary('+',x,x),s=createQueueSession(()=>.75);
+  const expressions:Expr[]=index===1||index===2?[x,twice]:[x];
+  s.records=expressions.map((expr,i)=>({id:i+1,expr,polynomial:normalize(expr)}));s.nextId=s.records.length+1;
+  s.mappings=[inputMapping(1,0,0)];
+  const left=s.records[0],right=left,op=index===1||index===3?'*':'+';
+  const expr=binary(op,left.expr,right.expr);s.queue=[{id:s.nextId++,expr,polynomial:normalize(expr),left,right,op}];
+  const q=generateQueueQuestion(s),expected:Selection=index===0||index===3?'new':index>=4?null:1;
+  if(index===5)for(let i=0;i<4;i++)enqueueCandidate(s,()=>.75);
+  const xMath=renderMath(x),sumMath=renderMath(twice),squareMath=renderMath(binary('*',x,x));
+  const copy=[
+    {title:t('계산하고 추가하기','Calculate, then add'),prompt:t(`${sumMath}는 2, 목록의 ${xMath}는 1. ${plusMath}로 추가하세요.`,`${sumMath} gives 2; the listed ${xMath} gives 1. Choose ${plusMath}.`),explanation:t('새 식이 빈칸에 들어갔습니다.','The new expression fills an empty slot.')},
+    {title:t('결과가 같으면 지우기','Clear a matching result'),prompt:t(`${squareMath}도 1입니다. 목록의 ${xMath}를 누르세요.`,`${squareMath} also gives 1. Tap the listed ${xMath}.`),explanation:t(`결과가 같아서 후보와 ${xMath}가 함께 지워졌습니다.`,'Their results match, so both expressions disappear.')},
+    {title:t('오답은 큐로','Mistakes go back'),prompt:t(`일부러 틀려보세요. 결과가 2인 후보에 ${xMath}를 누르세요.`,`Try a mistake: the candidate gives 2, but tap ${xMath}.`),explanation:t('후보가 큐로 돌아갔습니다. 목록은 그대로입니다.','The candidate returns to the queue. The list stays unchanged.')},
+    {title:t('입력이 바뀌면','When the input changes'),prompt:t(`위 타이머가 끝나면 ${xMath} 값이 바뀝니다. 식은 그대로입니다.`,`When the input timer runs out, ${xMath} changes. The expressions stay the same.`),explanation:t(`식은 그대로지만 결과는 달라졌습니다. 입력 교체 간격은 ${INPUT_SECONDS}초부터 ${MIN_INPUT_SECONDS}초까지 줄어듭니다.`,`Same expressions, different results. Input intervals decrease from ${INPUT_SECONDS}s to ${MIN_INPUT_SECONDS}s.`)},
+    {title:t('후보가 들어오는 동안','While candidates arrive'),prompt:t('② 세로 바가 끝날 때마다 새 식이 큐에 들어옵니다.','Each time timer ② runs out, a new expression joins the queue.'),explanation:t('계산하는 동안에도 후보는 계속 들어옵니다. 유입 간격은 10초에서 3초까지 줄어듭니다.','Candidates keep arriving while you calculate. Intervals decrease from 10s to 3s.')},
+    {title:t('큐가 가득 차면','When the queue fills'),prompt:t('한 칸 남았습니다. 다음 후보가 들어오는 걸 보세요.','One slot left. Watch the next candidate arrive.'),explanation:t('대기 중인 식이 5개가 되면 게임이 끝납니다.','Five waiting expressions end the game.')},
+  ][index];return{index,s,q,expected,inputChanged:false,...copy};
+}
+export function changeTutorialInput(lesson:ReturnType<typeof tutorialLesson>){
+  if(lesson.index!==3||lesson.inputChanged)return;
+  advanceQueueTime(lesson.s,INPUT_SECONDS*1000);updateQueueInput(lesson.s,()=>7.25/11);
+  lesson.q=generateQueueQuestion(lesson.s);lesson.inputChanged=true;
+}
+export interface TutorialControls{pause():void;resume():void;cancel():void;refreshLanguage():void}
+export function mountTutorial(host:HTMLElement,onExit:()=>void,onPlay:()=>void,onPause:()=>void=()=>{}):TutorialControls{
+  let introduction=true,step=0,lesson=tutorialLesson(0),answer:QueueAnswer|null=null,attempted=false,disposed=false,paused=false,busy=true;
+  let timerAnimation:Animation|null=null,drawing=false;
+  let arrivals=0,gameOver=false,generation=0;
+  const flight=new AdditionTransition(),queueMotion=new QueueMotion(),progress=loadProgress(),pointers=new TutorialTimerPointers(host);
+  document.body.classList.add('tutorial-playing');
+  function complete(){return answer!==null||(step===4&&arrivals===3)||(step===5&&gameOver);}
+  function canAdvance(){return introduction||complete()||progress.has(step);}
+  function settle(){
+    if(disposed)return;
+    if(!introduction&&complete()&&!progress.has(step)){
+      progress.add(step);
+      try{window.localStorage.setItem(TUTORIAL_PROGRESS_KEY,JSON.stringify([...progress].sort()));}catch{/* Practice works without storage. */}
+    }
+    busy=false;drawing=false;render();
+    host.querySelector<HTMLButtonElement>(targetSelector())?.focus();
+  }
+  function targetSelector(){
+    if(introduction||complete())return '#tutorial-next';
+    if(busy&&step===3&&!drawing&&!answer)return '.input-table-wrap';
+    if(busy&&step>=4)return '.danger-queue';
+    return typeof lesson.expected==='number'?`[data-tutorial-record="${lesson.expected}"]`:'#novel';
+  }
+  function highlightTarget(){
+    host.querySelectorAll('.tutorial-target').forEach(element=>{element.classList.remove('tutorial-target');element.removeAttribute('aria-describedby');});
+    if(disposed||paused||(busy&&!((step===3&&!drawing&&!answer)||step>=4)))return;
+    const target=host.querySelector<HTMLElement>(targetSelector());
+    target?.classList.add('tutorial-target');target?.setAttribute('aria-describedby','tutorial-instruction');
+  }
+  function goTo(next:number){
+    if(disposed||paused||(busy&&!progress.has(step))||next< -1||next>=TUTORIAL_STEPS)return;
+    const queued=introduction&&next===0?host.querySelector<HTMLElement>('.danger-slot.occupied'):null;
+    const from=queued?captureQueueCard(queued):null;
+    generation++;flight.cancel();queueMotion.cancel();timerAnimation?.cancel();timerAnimation=null;
+    introduction=next===-1;step=Math.max(0,next);lesson=tutorialLesson(step);answer=null;attempted=false;arrivals=0;gameOver=false;draw(from);
+  }
+  function instructionCopy(){
+    const done=complete();
+    const prompt=step===3&&lesson.inputChanged?t(`${inputEquality(2)}. 후보는 4, 목록은 2. ${plusMath}로 추가하세요.`,`${inputEquality(2)}. The candidate gives 4; ${renderMath(variable('x'))} gives 2. Choose ${plusMath}.`):lesson.prompt;
+    return introduction?t(`현재 입력으로 식의 결과를 비교하는 게임입니다. 같은 결과의 식을 누르고, 없으면 ${plusMath}로 추가하세요.`,`Compare expressions at the current input. Tap a listed expression with the same result, or add it with ${plusMath}.`):done&&!busy?lesson.explanation:attempted&&!answer?t('이번 단계에 적힌 대상을 눌러보세요.','Choose the target described above.'):prompt;
+  }
+  function render(){
+    const{s,q}=lesson,done=complete(),locked=introduction||busy||done||step>=4||(step===3&&!lesson.inputChanged);
+    const copy=instructionCopy();
+    host.innerHTML=gameBoardMarkup({session:introduction?{...s,queue:[{...q,id:q.candidateId}],current:null}:s,question:q,hideCandidate:introduction,answer,feedback:answer!==null,drawing,storing:busy&&Boolean(answer?.returned||answer?.added),locked,busy,tutorial:true,showRemoved:busy,animateFeedback:busy,arrivalInterval:10,remaining:10,changedInputs:step===3&&lesson.inputChanged&&!done?[0]:[],className:`tutorial-board ${gameOver?'is-ending':''} ${done&&!busy&&step<4?'tutorial-resolved':''}`})+
+      `${gameOver?'<div class="tutorial-game-over" role="status">Game over.</div>':''}<aside class="tutorial-coach" aria-label="${t('튜토리얼 안내','Tutorial instructions')}"><button class="coach-arrow" id="tutorial-prev" ${introduction||(busy&&!progress.has(step))?'disabled':''} aria-label="${t('이전 단계','Previous step')}"><span aria-hidden="true">&lt;</span></button><div class="coach-center"><span class="coach-step">${introduction?0:step+1}/${TUTORIAL_STEPS} · ${introduction?'Exists or New':lesson.title}</span><p id="tutorial-instruction" class="tutorial-prompt" aria-live="polite">${copy}</p></div><button class="coach-arrow" id="tutorial-next" ${(busy&&!progress.has(step))||!canAdvance()?'disabled':''} aria-label="${!introduction&&step===TUTORIAL_STEPS-1?t('로비로 돌아가기','Return to lobby'):t('다음 단계','Next step')}"><span aria-hidden="true">&gt;</span></button></aside>`;
+    fitCandidate(host.querySelector('.candidate'));fitQueueExpressions(host);pointers.show(!introduction&&step>=4&&!gameOver);
+    host.querySelector('#pause')!.addEventListener('click',onPause);
+    host.querySelectorAll<HTMLButtonElement>('[data-tutorial-record]').forEach(button=>button.addEventListener('click',()=>choose(Number(button.dataset.tutorialRecord))));
+    host.querySelector('#novel')!.addEventListener('click',()=>choose('new'));
+    host.querySelector('#tutorial-prev')!.addEventListener('click',()=>goTo(step-1));
+    host.querySelector('#tutorial-next')!.addEventListener('click',()=>{
+      if(disposed||paused||(busy&&!progress.has(step))||!canAdvance())return;
+      if(introduction){goTo(0);return;}
+      if(step===TUTORIAL_STEPS-1){onExit();return;}goTo(step+1);
     });
-    host.querySelector('#tutorial-settings')?.addEventListener('click', onExit);
-  };
-  render(); host.querySelector<HTMLElement>('#lesson-title')?.focus();
-  return {pause:() => transition.pause(), resume:() => transition.resume(), cancel:() => {disposed = true; transition.cancel();}};
+    highlightTarget();
+  }
+  function draw(from:QueueSnapshot|null=null){
+    if(introduction){busy=false;drawing=false;render();host.querySelector<HTMLButtonElement>('#tutorial-next')?.focus();return;}
+    busy=true;drawing=step<4;render();
+    if(step>=4){
+      if(progress.has(step)){
+        const count=step===4?3:1;for(let i=0;i<count;i++)enqueueCandidate(lesson.s,()=>.75);arrivals=count;gameOver=step===5;settle();
+      }else void showArrivals();
+      return;
+    }
+    const source=host.querySelector<HTMLElement>('.danger-slot:last-child')!,target=host.querySelector<HTMLElement>('#question-title')!;
+    const snapshot=from??captureQueueCard(source);
+    if(!from){
+      snapshot.html=renderMath(lesson.q.expr);
+      const text=target.querySelector('.formula')!.getBoundingClientRect();
+      snapshot.textWidth=text.width*(parseFloat(getComputedStyle(source).fontSize)||16)/(parseFloat(getComputedStyle(target.querySelector('.operand-expression')!).fontSize)||32);
+    }
+    void queueMotion.fly(snapshot,target,'draw',()=>{
+      if(disposed)return;drawing=false;
+      if(step===3&&!lesson.inputChanged){void changeInput();}else settle();
+    });
+  }
+  async function runDemoAnimation(selector:string,frames:Keyframe[],duration:number):Promise<boolean>{
+    const target=host.querySelector<HTMLElement>(selector)!,activeGeneration=generation;
+    try{
+      const animation=target.animate(frames,{duration,fill:'forwards',easing:'linear'});
+      timerAnimation=animation;if(paused)animation.pause();
+      await animation.finished;if(disposed||generation!==activeGeneration)return false;
+      timerAnimation=null;animation.cancel();return true;
+    }catch{return false;}
+  }
+  async function changeInput(){
+    if(disposed)return;busy=true;render();
+    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(!await runDemoAnimation('#input-time-bar',[{transform:'scaleX(1)',offset:0},{transform:'scaleX(1)',offset:.25},{transform:'scaleX(0)',offset:.8},{transform:'scaleX(0)',offset:1}],reduced?800:3200))return;
+    changeTutorialInput(lesson);render();
+    // Allow time to compare the new value before enabling the answer.
+    if(!await runDemoAnimation('.input-values',[{opacity:1},{opacity:1}],900))return;
+    settle();
+  }
+  async function showArrivals(){
+    const count=step===4?3:1,reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    for(let i=0;i<count;i++){
+      if(!await runDemoAnimation('#time-bar',[{transform:'scaleY(1)',offset:0},{transform:'scaleY(0)',offset:1}],reduced?500:1400))return;
+      enqueueCandidate(lesson.s,()=>.75);arrivals++;render();
+      const card=host.querySelector<HTMLElement>(`#queue-${lesson.s.queue[0].id}`)!;
+      const from=captureQueueCard(card);from.top-=44;
+      await new Promise<void>(resolve=>{void queueMotion.fly(from,card,'arrival',resolve);});
+      if(disposed)return;
+    }
+    if(step===5){
+      host.querySelector('.game')?.classList.add('is-ending');void playFeedback(false,true);
+      if(!await runDemoAnimation('.danger-queue',[{opacity:1},{opacity:1}],1000))return;
+      gameOver=true;
+    }
+    settle();
+  }
+  function choose(selection:Selection){
+    if(introduction||disposed||paused||busy||complete()||step>=4||(step===3&&!lesson.inputChanged))return;
+    attempted=true;void unlockSound();
+    if(selection!==lesson.expected){void playFeedback(false,false);render();return;}
+    answer=submitQueueAnswer(lesson.s,lesson.q,selection);busy=true;render();void playFeedback(answer.correct,false);
+    const source=host.querySelector<HTMLElement>('#question-title')!;
+    if(answer.removed){
+      const target=host.querySelector<HTMLElement>('#clearing-record')!;
+      void flight.absorb(source,target,settle,()=>target.classList.add('record-clearing'));
+    }else{
+      const target=host.querySelector<HTMLElement>(answer.returned?`#queue-${lesson.q.candidateId}`:`#record-${answer.added!.id}`)!;
+      void flight.store(source,{parts:[target.querySelector<HTMLElement>('.record-expression')!],reveal:[target],frame:target},settle);
+    }
+  }
+  draw();
+  return{refreshLanguage(){
+    const translated=tutorialLesson(step);lesson.title=translated.title;lesson.prompt=translated.prompt;lesson.explanation=translated.explanation;
+    host.querySelector('.coach-step')!.textContent=`${introduction?0:step+1}/${TUTORIAL_STEPS} · ${introduction?'Exists or New':lesson.title}`;
+    host.querySelector('#tutorial-instruction')!.innerHTML=instructionCopy();
+    host.querySelector('#tutorial-prev')!.setAttribute('aria-label',t('이전 단계','Previous step'));
+    host.querySelector('#tutorial-next')!.setAttribute('aria-label',!introduction&&step===TUTORIAL_STEPS-1?t('로비로 돌아가기','Return to lobby'):t('다음 단계','Next step'));
+    host.querySelector('.tutorial-coach')!.setAttribute('aria-label',t('튜토리얼 안내','Tutorial instructions'));
+    localizeGameBoard(host,{session:lesson.s,question:lesson.q,answer,feedback:answer!==null,arrivalInterval:10,remaining:10});pointers.show(!introduction&&step>=4&&!gameOver);
+  },pause(){paused=true;highlightTarget();flight.pause();queueMotion.pause();timerAnimation?.pause();},resume(){paused=false;flight.resume();queueMotion.resume();timerAnimation?.play();highlightTarget();},cancel(){disposed=true;pointers.cancel();flight.cancel();queueMotion.cancel();timerAnimation?.cancel();timerAnimation=null;document.body.classList.remove('tutorial-playing');}};
 }
